@@ -1,7 +1,7 @@
 from sensor import Sensor
 from typing import Tuple
 import numpy as np
-from math import cos, sin
+from math import cos, sin, atan
 import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 
@@ -53,20 +53,26 @@ class RangeSensor(Sensor):
     ang_NED = ang_host_NED + self.ang_host_BODY_self_BODY
 
     obstacle_pos_host_BODY = None
+    obstacle_pos_NED = None
     for r in np.arange(0, self.max_range, self.range_res):
-      for ang in np.arange(-self.arc_angle/2, self.arc_angle/2, self.angle_res):
+      for ang in np.arange(-self.arc_angle/2, self.arc_angle/2 + self.angle_res, self.angle_res):
         obstacle_pos_NED = pos_NED + r*np.array([cos(ang + ang_NED), sin(ang + ang_NED)])
-        if environment.is_cell_at_coords_occupied(obstacle_pos_NED[0], obstacle_pos_NED[1]):
+
+        if environment[obstacle_pos_NED[0], obstacle_pos_NED[1]]:
+          if r == 0:
+            raise ZeroRangeException()
           candidate_obstacle_pos_host_BODY = self.transform_to_host_BODY_from_NED(pos_host_NED, ang_host_NED, obstacle_pos_NED)
+
           if obstacle_pos_host_BODY is None:
             obstacle_pos_host_BODY = candidate_obstacle_pos_host_BODY
-          else:
-            obstacle_pos_host_BODY = candidate_obstacle_pos_host_BODY if np.linalg.norm(candidate_obstacle_pos_host_BODY) < np.linalg.norm(obstacle_pos_host_BODY) else obstacle_pos_host_BODY
-        if (r == 0):
-          break
+
+          elif np.linalg.norm(candidate_obstacle_pos_host_BODY) < np.linalg.norm(obstacle_pos_host_BODY):
+            obstacle_pos_host_BODY = candidate_obstacle_pos_host_BODY
+
       if not obstacle_pos_host_BODY is None:
         return obstacle_pos_host_BODY
-    return obstacle_pos_host_BODY
+
+    raise FullRangeException()
 
   def transform_to_NED_from_host_BODY(self, pos_host_NED: np.ndarray, ang_host_NED: float, vec_host_BODY) -> np.ndarray:
     T_NED_host_BODY = np.array([
@@ -87,12 +93,32 @@ class RangeSensor(Sensor):
   def plot(self, axis, pos_host_NED: np.ndarray, ang_host_NED: float) -> None:
     pos_NED = self.transform_to_NED_from_host_BODY(pos_host_NED, ang_host_NED, self.self_pos_host_BODY)
     ang_NED = ang_host_NED + self.ang_host_BODY_self_BODY
-    self.fig = Wedge((pos_NED[0], pos_NED[1]), self.max_range, np.rad2deg(ang_NED-self.arc_angle/2), np.rad2deg(ang_NED+self.arc_angle/2), color="r", alpha=0.5)
-    axis.add_patch(self.fig)
+    self.figs = []
+    for ang in np.arange(-self.arc_angle/2, self.arc_angle/2 + self.angle_res, self.angle_res):
+      self.figs.append(
+        axis.plot(
+          [pos_NED[0], pos_NED[0] + self.max_range*cos(ang + ang_NED)],
+          [pos_NED[1], pos_NED[1] + self.max_range*sin(ang + ang_NED)],
+          color="r", alpha=0.5)[0]
+      )
 
   def update_plot(self, pos_host_NED: np.ndarray, ang_host_NED: float) -> None:
     pos_NED = self.transform_to_NED_from_host_BODY(pos_host_NED, ang_host_NED, self.self_pos_host_BODY)
     ang_NED = ang_host_NED + self.ang_host_BODY_self_BODY
-    self.fig.set_center((pos_NED[0], pos_NED[1]))
-    self.fig.set_theta1(np.rad2deg(ang_NED-self.arc_angle/2))
-    self.fig.set_theta2(np.rad2deg(ang_NED+self.arc_angle/2))
+    i = 0
+    for ang in np.arange(-self.arc_angle/2, self.arc_angle/2 + self.angle_res, self.angle_res):
+      self.figs[i].set_data(
+        [pos_NED[0], pos_NED[0] + self.max_range*cos(ang + ang_NED)],
+        [pos_NED[1], pos_NED[1] + self.max_range*sin(ang + ang_NED)]
+      )
+      i += 1
+
+class ZeroRangeException(Exception):
+  def __init__(self, msg="Zero range detected"):
+    self.msg = msg
+    super().__init__(msg)
+
+class FullRangeException(Exception):
+  def __init__(self, msg="Nothing detected within range"):
+    self.msg = msg
+    super().__init__(msg)
