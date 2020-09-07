@@ -3,6 +3,7 @@ from range_sensor import RangeSensor
 from crazy_flie import CrazyFlie
 
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import numpy as np
 
 if __name__ == "__main__":
