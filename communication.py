@@ -6,7 +6,7 @@ from random import seed, randint
 
 class CommunicationNode(ABC):
     def __init__(self):
-        super().__init__()
+        super().__init__()  
 
     @abstractmethod
     def recv_msg(self, msg):
@@ -14,7 +14,7 @@ class CommunicationNode(ABC):
 
 class CommunicationChannel():
 
-  def __init__(self, com_filter = lambda recipient, sender: True, **kwargs):
+  def __init__(self, com_filter = lambda sender, recipient: True, **kwargs):
     self.com_filter = com_filter
     self.delay = kwargs["delay"] if "delay" in kwargs else None
     self.packet_loss = kwargs["packet_loss"] if "packet_loss" in kwargs else None
