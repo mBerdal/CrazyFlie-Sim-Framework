@@ -1,14 +1,20 @@
 from range_sensor import RangeSensor, ZeroRangeException, FullRangeException
 from sensor import Sensor
 from environment import Environment
+from communication import CommunicationNode
+
 import numpy as np
 from typing import List
 
-class CrazyFlie():
+class CrazyFlie(CommunicationNode):
   def __init__(self, initial_state: np.ndarray, sensors: List[Sensor]) -> None:
     self.state = initial_state
     self.sensors = sensors
     self.crashed = False
+
+  def recv_msg(self, msg):
+    print(f"{self} reveiced msg")
+    print(msg)
 
   def do_step(self, environment: Environment, time_step: float) -> None:
     assert not self.crashed
