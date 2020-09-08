@@ -18,13 +18,13 @@ class Logger(ABC):
     Write to the log
 """
 
-    def __init__(self):
+    def __init__(self):#environment, dersom null bare lesing
         pass
 
     @abstractmethod
-    def read_log(self):
+    def read_log(self): # return environment og liste over timestep og state for alle droner
         pass
 
     @abstractmethod
-    def write_to_log(self)
+    def write_to_log(self):
         pass
