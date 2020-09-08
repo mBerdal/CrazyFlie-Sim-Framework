@@ -18,7 +18,7 @@ def run_animation(environment, crazy_flies):
       cf.update_plot()
 
 
-  animation.FuncAnimation(fig, animate, frames=10, repeat=False)
+  an = animation.FuncAnimation(fig, animate, frames=10, repeat=False)
   plt.show()
 
 if __name__ == "__main__":
