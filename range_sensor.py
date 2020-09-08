@@ -48,7 +48,7 @@ class RangeSensor(Sensor):
         self.sensor_pos_bdy = sensor_pos_bdy
         self.sensor_attitude_bdy = sensor_attitude_body
 
-    def get_reading(self, environment: Environment, state_host: np.ndarray) -> np.ndarray:
+    def get_reading(self, environment: Environment, state_host: np.ndarray, return_all_beams = False) -> np.ndarray:
         # assert pos_host_NED.shape == (Environment.__SPATIAL_DIMS__, ), f"host position has shape {pos_host_NED.shape}, should be {(Environment.__SPATIAL_DIMS__, )}"
         #Get rotation from sensor fram to NED frame
         rot_sensor_to_body = rot_matrix_zyx(self.sensor_attitude_bdy.item(0), self.sensor_attitude_bdy.item(1),
@@ -67,8 +67,11 @@ class RangeSensor(Sensor):
             beam = self.trace_beam(environment,pos_sensor_ned,rot_beam_to_ned)
             beams[:,ind] = beam.ravel()
         #Return the minimum of the beams
-        ind = np.argmin(np.linalg.norm(beams,axis=0))
-        return beams[:,ind]
+        if return_all_beams:
+            return beams
+        else:
+            ind = np.argmin(np.linalg.norm(beams,axis=0))
+            return beams[:,ind]
 
     def trace_beam(self, environment: Environment, pos_sensor_ned: np.ndarray, rot_beam_to_ned: np.ndarray):
         coarse_range = np.array([[min(environment.x_res, environment.y_res)], [0], [0]])
@@ -96,28 +99,27 @@ class RangeSensor(Sensor):
         else:
             return pos_beam_ned - pos_sensor_ned
 
-    def plot(self, axis, pos_host_NED: np.ndarray, ang_host_NED: float) -> None:
-        pos_NED = self.transform_to_NED_from_host_BODY(pos_host_NED, ang_host_NED, self.self_pos_host_BODY)
-        ang_NED = ang_host_NED + self.ang_host_BODY_self_BODY
+    def plot(self, axis, environment, state_host: np.ndarray) -> None:
         self.figs = []
-        for ang in np.arange(-self.arc_angle / 2, self.arc_angle / 2 + self.angle_res, self.angle_res):
+        beams = self.get_reading(environment,state_host,return_all_beams=True)
+        pos_host = state_host[0:3]
+        for i in range(beams.shape[1]):
             self.figs.append(
                 axis.plot(
-                    [pos_NED[0], pos_NED[0] + self.max_range * cos(ang + ang_NED)],
-                    [pos_NED[1], pos_NED[1] + self.max_range * sin(ang + ang_NED)],
+                    [pos_host.item(0), pos_host.item(0) +beams.item(0,i)],
+                    [pos_host.item(1), pos_host.item(1) +beams.item(1,i)],
                     color="r", alpha=0.5)[0]
             )
 
-    def update_plot(self, pos_host_NED: np.ndarray, ang_host_NED: float) -> None:
-        pos_NED = self.transform_to_NED_from_host_BODY(pos_host_NED, ang_host_NED, self.self_pos_host_BODY)
-        ang_NED = ang_host_NED + self.ang_host_BODY_self_BODY
+    def update_plot(self, environment, state_host: np.ndarray) -> None:
+        beams = self.get_reading(environment,state_host,return_all_beams=True)
         i = 0
-        for ang in np.arange(-self.arc_angle / 2, self.arc_angle / 2 + self.angle_res, self.angle_res):
+        pos_host = state_host[0:3]
+        for i in range(beams.shape[1]):
             self.figs[i].set_data(
-                [pos_NED[0], pos_NED[0] + self.max_range * cos(ang + ang_NED)],
-                [pos_NED[1], pos_NED[1] + self.max_range * sin(ang + ang_NED)]
+                [pos_host.item(0), pos_host.item(0) + beams.item(0, i)],
+                [pos_host.item(1), pos_host.item(1) + beams.item(1, i)]
             )
-            i += 1
 
 
 class ZeroRangeException(Exception):
