@@ -25,7 +25,7 @@ class Environment():
 
     Methods
     ----------
-    __init__(occupancy_grid, map_resolution): None
+    __init__(ocgit cupancy_grid, map_resolution): None
       Takes as argument an n-by-m matrix of booleans and a tuple of resolutions and computes an n-by-m dictionary 'map' of booleans
 
     __getitem__(coords): bool

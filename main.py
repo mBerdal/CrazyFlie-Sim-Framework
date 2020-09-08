@@ -7,6 +7,20 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 
+def run_animation(environment, crazy_flies):
+  fig, ax = plt.subplots()
+  ax.axis("equal")
+  environment.plot(ax)
+  for cf in crazy_flies: cf.plot(ax)
+  def animate(i):
+    for cf in crazy_flies:
+      cf.do_step(e, 0.10)
+      cf.update_plot()
+
+
+  animation.FuncAnimation(fig, animate, frames=10, repeat=False)
+  plt.show()
+
 if __name__ == "__main__":
   x_max, y_max = (200, 200)
   e = Environment([[x == 0 or x == x_max-1 or y == 0 or y == y_max-1 for x in range(x_max)] for y in range(y_max)])
@@ -21,16 +35,4 @@ if __name__ == "__main__":
   c = CommunicationChannel()
   c.distribute_msg(cfs[0], cfs[1:3], "JADDA")
 
-def run_animation(environment, crazy_flies):
-  fig, ax = plt.subplots()
-  ax.axis("equal")
-  environment.plot(ax)
-  for cf in crazy_flies: cf.plot(ax)
-  def animate(i):
-    for cf in crazy_flies:
-      cf.do_step(e, 0.10)
-      cf.update_plot()
-
-
-  animation.FuncAnimation(fig, animate, frames=10, repeat=False)
-  plt.show()
+  run_animation(e, cfs)
