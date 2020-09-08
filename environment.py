@@ -53,7 +53,7 @@ class Environment():
 
   def __init__(self, occupancy_grid: List[List[bool]], map_resolution: Tuple = (0.08, 0.08)) -> None:
     self.x_res, self.y_res = map_resolution
-    self.map = list(reversed(occupancy_grid))
+    self.map = occupancy_grid
 
   def __getitem__(self, coords: Tuple) -> bool:
     x, y = coords
