@@ -19,12 +19,12 @@ class CrazyFlie(CommunicationNode):
   def do_step(self, environment: Environment, time_step: float) -> None:
     assert not self.crashed
     
-    avg_obstacle_vec = np.zeros((Environment.__SPATIAL_DIMS__,))
+    avg_obstacle_vec = np.zeros((6,1))
     for s in self.sensors:
       if isinstance(s, RangeSensor):
         try:
-          dist = s.get_reading(environment, self.state, 0)
-          avg_obstacle_vec += dist
+          measurement = s.get_reading(environment, self.state)
+          avg_obstacle_vec += np.concatenate([measurement.reshape(3,1),np.zeros([3,1])])
         except ZeroRangeException as zre:
           print(zre.msg)
           self.crashed = True
@@ -33,15 +33,17 @@ class CrazyFlie(CommunicationNode):
 
     self.state -= avg_obstacle_vec
 
-  def plot(self, axis):
+  def plot(self, axis, environment):
     self.fig, = axis.plot([self.state[0]], [self.state[1]], 'go')
     for s in self.sensors:
-      if isinstance(s, RangeSensor): s.plot(axis, self.state, 0)
+      if isinstance(s, RangeSensor):
+        s.plot(axis,environment,self.state)
 
-  def update_plot(self):
+  def update_plot(self, environment):
     self.fig.set_data(self.state[0], self.state[1])
     for s in self.sensors:
-      if isinstance(s, RangeSensor): s.update_plot(self.state, 0)
+      if isinstance(s, RangeSensor):
+        s.update_plot(environment,self.state)
 
 class CrazyFlieCrash(Exception):
   pass
