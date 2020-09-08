@@ -31,9 +31,8 @@ class RangeSensor(Sensor):
 
     Methods
     ----------
-    get_reading(environment, pos_host_NED, ang_host_NED): np.ndarray/None
-      Takes as argument an environment object, position of host represented in the NED coordinate system and
-      orientation of host's x-axis relative to x-axis of the NED coordinate system. If there are obstacles
+    get_reading(environment, state_host): np.ndarray/None
+      Takes as argument an environment object, state of host represented in the NED coordinate system. If there are obstacles
       in the environment that are closer to the sensor than max_range and within field of view it returns
       a vector from the origin of host's coordinate to the nearest obstacle. If there are no obstacles closer
       than max_range and within field of view it returns None
@@ -46,36 +45,43 @@ class RangeSensor(Sensor):
         self.range_res = range_res
         self.arc_angle = arc_angle
         self.angle_res = angle_res
-        self.num_beams = 3
         self.sensor_pos_bdy = sensor_pos_bdy
         self.sensor_attitude_bdy = sensor_attitude_body
 
     def get_reading(self, environment: Environment, state_host: np.ndarray) -> np.ndarray:
         # assert pos_host_NED.shape == (Environment.__SPATIAL_DIMS__, ), f"host position has shape {pos_host_NED.shape}, should be {(Environment.__SPATIAL_DIMS__, )}"
+        #Get rotation from sensor fram to NED frame
         rot_sensor_to_body = rot_matrix_zyx(self.sensor_attitude_bdy.item(0), self.sensor_attitude_bdy.item(1),
                                             self.sensor_attitude_bdy.item(2))
         rot_body_to_ned = rot_matrix_zyx(state_host.item(3), state_host.item(4), state_host.item(5))
         rot_sensor_to_ned = np.matmul(rot_body_to_ned, rot_sensor_to_body)
 
         pos_sensor_ned = state_host[0:3] + np.matmul(rot_body_to_ned, self.sensor_pos_bdy).reshape(3,1)
-        beams = []
-        for ang in np.arange(-self.arc_angle / 2, self.arc_angle / 2 + self.angle_res, self.angle_res):
+        num_beams = np.int(self.arc_angle/self.angle_res)+1
+        beams = np.zeros([3,num_beams])
+        #Trace different beams within the cone of the sensor
+        for ind, ang in enumerate(np.arange(-self.arc_angle / 2, self.arc_angle / 2 + self.angle_res, self.angle_res)):
+            #Get rotation matrix from beam frame to ned frame
             rot_beam_to_sensor = rot_matrix_zyx(0,0,ang)
             rot_beam_to_ned = np.matmul(rot_sensor_to_ned, rot_beam_to_sensor)
             beam = self.trace_beam(environment,pos_sensor_ned,rot_beam_to_ned)
-            beams.append(beam)
-        return beams
+            beams[:,ind] = beam.ravel()
+        #Return the minimum of the beams
+        ind = np.argmin(np.linalg.norm(beams,axis=0))
+        return beams[:,ind]
 
     def trace_beam(self, environment: Environment, pos_sensor_ned: np.ndarray, rot_beam_to_ned: np.ndarray):
         coarse_range = np.array([[min(environment.x_res, environment.y_res)], [0], [0]])
         converged = False
         coarse_beam = np.zeros((3, 1))
-        while not converged and coarse_beam[0] < self.max_range:
-            coarse_beam = coarse_beam + coarse_range
+        #Find the first instance that the beam enters an occupied cell
+        while not converged and coarse_beam[0] <= self.max_range:
             pos_beam_ned = np.matmul(rot_beam_to_ned, coarse_beam).reshape(3,1) + pos_sensor_ned
             if environment[(pos_beam_ned.item(0), pos_beam_ned.item(1))]:
                 converged = True
-
+            else:
+                coarse_beam = coarse_beam + coarse_range
+        #Use binary search to refine the coarse measurment
         if converged:
             beam_lower = coarse_beam - coarse_range
             beam_upper = coarse_beam
@@ -86,9 +92,9 @@ class RangeSensor(Sensor):
                     beam_upper = midpoint_beam
                 else:
                     beam_lower = midpoint_beam
-            return pos_midpoint_ned
+            return pos_midpoint_ned - pos_sensor_ned
         else:
-            return self.max_range
+            return pos_beam_ned - pos_sensor_ned
 
     def plot(self, axis, pos_host_NED: np.ndarray, ang_host_NED: float) -> None:
         pos_NED = self.transform_to_NED_from_host_BODY(pos_host_NED, ang_host_NED, self.self_pos_host_BODY)
