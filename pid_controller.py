@@ -1,3 +1,6 @@
+# As of 09.09, this is copied from https://gist.github.com/msrks/ab6b6fe2a3f62540a6304c54811abf3a
+# Must know the EOM to implement it properly
+# State vector for simulator: [x, y, yaw, x_dot, y_dot, yaw_dot]'?
 class PIDController:
     def __init__(self, kp = 0.0, ki = 0.0, kd = 0.0, max_windup = 20,
             start_time = 0, alpha = 1., u_bounds = [float('-inf'), float('inf')]):
