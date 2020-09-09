@@ -2,7 +2,7 @@ from range_sensor import RangeSensor, ZeroRangeException, FullRangeException
 from sensor import Sensor
 from environment import Environment
 from communication import CommunicationNode
-from utils import rot_matrix_zyx, angular_transformation_matrix_zyx
+from utils.rotation_utils import rot_matrix_zyx, angular_transformation_matrix_zyx
 
 import numpy as np
 from typing import List

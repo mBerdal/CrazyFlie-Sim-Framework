@@ -18,8 +18,8 @@ def run_animation(environment, crazy_flies):
     for ind, cf in enumerate(crazy_flies):
       cf.update_state(0.10)
       readings = cf.read_sensors(environment,vector_format=False)
-      print("Sensor Readings CF:",cf.id)
-      print(readings)
+      #print("Sensor Readings CF:",cf.id)
+      #print(readings)
       cf.update_plot(environment)
   an = animation.FuncAnimation(fig, animate, frames=100, repeat=False)
   plt.show()
