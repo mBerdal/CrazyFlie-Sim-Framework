@@ -29,21 +29,7 @@ class Simulator():
         "controller must be supplied as a keyword argument when drone trajectories are not known. Simulator constructor failed"
 
       self.state = self.SimulatorState.NORMAL
-      self.drones = {
-        drone["id"]: CrazyFlie(
-          drone["state"],
-          [
-            RangeSensor(
-              4,
-              0.001,
-              np.deg2rad(27),
-              np.deg2rad(27/9),
-              np.array([0, 0, 0]).reshape(3, 1),
-              np.array([0, 0, (np.pi/2)*(i + 1/2)]).reshape(3, 1)
-            ) for i in range(4)
-          ]
-        ) for drone in kwargs["drones"]
-      }
+      self.drones = Simulator.__load_drones(kwargs["drones"])
 
       self.com_channel = CommunicationChannel(
         lambda sender, recipient: kwargs["com_filter"](sender, recipient) if "com_filter" in kwargs else True,
@@ -56,7 +42,11 @@ class Simulator():
   
     elif "trajectories" in kwargs:
       self.state = self.SimulatorState.RECREATE
-      self.drones = {
+      self.drones = Simulator.__load_drones(kwargs["trajectories"]["0.0"])
+
+  @staticmethod
+  def __load_drones(drone_list):
+    return {
         drone["id"]: CrazyFlie(
           drone["state"],
           [
@@ -69,5 +59,5 @@ class Simulator():
               np.array([0, 0, (np.pi/2)*(i + 1/2)]).reshape(3, 1)
             ) for i in range(4)
           ]
-        ) for drone in kwargs["trajectories"]["0.0"]
+        ) for drone in drone_list
       }
