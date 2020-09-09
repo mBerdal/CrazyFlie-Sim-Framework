@@ -4,7 +4,7 @@ import numpy as np
 from math import cos, sin, atan
 import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
-from utils import rot_matrix_zyx
+from utils.rotation_utils import rot_matrix_zyx
 
 from environment import Environment
 
