@@ -78,7 +78,7 @@ class RangeSensor(Sensor):
         converged = False
         coarse_beam = np.zeros((3, 1))
         #Find the first instance that the beam enters an occupied cell
-        while not converged and coarse_beam[0] <= self.max_range:
+        while not converged and coarse_beam[0] < self.max_range + coarse_range.item(0):
             pos_beam_ned = np.matmul(rot_beam_to_ned, coarse_beam).reshape(3,1) + pos_sensor_ned
             if environment[(pos_beam_ned.item(0), pos_beam_ned.item(1))]:
                 converged = True
