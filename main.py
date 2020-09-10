@@ -5,6 +5,7 @@ from communication import CommunicationChannel, CommunicationNode
 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.style as mplstyle
 import numpy as np
 
 def run_animation(environment, crazy_flies):
@@ -60,6 +61,7 @@ state_dot = np.zeros((6,1))
 acc_limits_lower = -np.array([1,1,1,np.deg2rad(10),np.deg2rad(10),np.deg2rad(10)]).reshape(6,1)
 acc_limits_upper = np.array([1,1,1,np.deg2rad(10),np.deg2rad(10),np.deg2rad(10)]).reshape(6,1)
 
+mplstyle.use('fast')
 if __name__ == "__main__":
   x_max, y_max = (200, 200)
   e = Environment([[x == 0 or x == x_max-1 or y == 0 or y == y_max-1 for x in range(x_max)] for y in range(y_max)])
