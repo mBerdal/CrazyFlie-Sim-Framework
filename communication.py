@@ -34,3 +34,5 @@ class CommunicationChannel():
         sleep(self.delay)
       if self.packet_loss is None or randint(0, 100-1) > self.packet_loss:
         recipient.recv_msg(msg)
+      else:
+        recipient.recv_msg(None)
