@@ -38,6 +38,9 @@ class Simulator(CommunicationNode):
       # TODO: create controller class and assign
       # self.controller = controller
       self.logger = Logger(self.environment) if "log_sim" in kwargs and kwargs["log_sim"] else None
+      self.drone_sensor_data = {}
+      self.drone_state = {}
+      self.commands = {d.id: 0 for d in self.drones}
   
     elif "trajectories" in kwargs:
       self.state = self.SimulatorState.RECREATE
@@ -77,5 +80,7 @@ class Simulator(CommunicationNode):
     sem = Semaphore(0)
     for d in self.drones:
       d.update_state(self.commands[d.id])
-      self.com_channel.send_msg(sender = d, recipients = [self], msg_callback = set_sensor_data_for_drone(d.id, d.get_reading(self.environment), sem))
-      self.com_channel.send_msg(sender = d, recipients = [self], msg_callback = set_state_for_drone(d.id, d.state, sem))
+      self.com_channel.send_msg(d, [self], set_sensor_data_for_drone(d.id, d.get_reading(self.environment), sem))
+      self.com_channel.send_msg(d, [self], set_state_for_drone(d.id, d.state, sem))
+
+    
