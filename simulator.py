@@ -6,7 +6,13 @@ from logger import Logger
 
 import numpy as np
 from enum import Enum
-from threading import Semaphore
+
+class Controller():
+  def __init__(self):
+    pass
+  def get_commands(self, states, measurements):
+    return 1
+
 
 class Simulator(CommunicationNode):
 
@@ -28,19 +34,22 @@ class Simulator(CommunicationNode):
         "controller must be supplied as a keyword argument when drone trajectories are not known. Simulator constructor failed"
 
       self.state = self.SimulatorState.NORMAL
+
+
       self.drones = Simulator.__load_drones(kwargs["drones"])
+      self.drone_sensor_data = {}
+      self.drone_states = {}
+      self.commands = {d.id: 0 for d in self.drones}
+
+      self.controller = kwargs["controller"]
 
       self.com_channel = CommunicationChannel(
         lambda sender, recipient: kwargs["com_filter"](sender, recipient) if "com_filter" in kwargs else True,
         delay = kwargs["com_delay"] if "com_delay" in kwargs else None,
         packet_loss = kwargs["com_packet_loss"] if "com_packet_loss" in kwargs else None
       )
-      # TODO: create controller class and assign
-      # self.controller = controller
+
       self.logger = Logger(self.environment) if "log_sim" in kwargs and kwargs["log_sim"] else None
-      self.drone_sensor_data = {}
-      self.drone_state = {}
-      self.commands = {d.id: 0 for d in self.drones}
   
     elif "trajectories" in kwargs:
       self.state = self.SimulatorState.RECREATE
@@ -69,18 +78,22 @@ class Simulator(CommunicationNode):
   
   def sim_step(self, time_step):
     
-    def set_sensor_data_for_drone(drone_id, sensor_data, sem):
+    def set_sensor_data_for_drone(drone_id, sensor_data):
       self.drone_sensor_data[drone_id] = sensor_data
-      sem.release()
 
-    def set_state_for_drone(drone_id, drone_state, sem):
-      self.drone_state[drone_id] = drone_state
-      sem.release()
+    def set_state_for_drone(drone_id, drone_state):
+      self.drone_states[drone_id] = drone_state
 
-    sem = Semaphore(0)
+    msg_threads = []
     for d in self.drones:
       d.update_state(self.commands[d.id])
-      self.com_channel.send_msg(d, [self], set_sensor_data_for_drone(d.id, d.get_reading(self.environment), sem))
-      self.com_channel.send_msg(d, [self], set_state_for_drone(d.id, d.state, sem))
+      sensor_data_thread = self.com_channel.send_msg(d, [self], set_sensor_data_for_drone(d.id, d.get_reading(self.environment)))
+      drone_state_thread = self.com_channel.send_msg(d, [self], set_state_for_drone(d.id, d.state))
+      msg_threads.append(sensor_data_thread, drone_state_thread)
+    
+    for t in msg_threads:
+      t.join()
+
+    self.commands = self.controller.get_commands(self.drone_states, self.drone_sensor_data)
 
     

@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from time import sleep
 from threading import Thread
 from random import seed, randint
+from typing import List
 
 class CommunicationNode(ABC):
     def __init__(self):
@@ -20,15 +21,16 @@ class CommunicationChannel():
     self.packet_loss = kwargs["packet_loss"] if "packet_loss" in kwargs else None
     seed()
   
-  def send_msg(self, sender, recipients, msg):
+  def send_msg(self, sender, recipients, msg) -> List[Thread]:
+    threads = []
     for recipient in list(filter(lambda recipient: self.com_filter(sender, recipient), recipients)):
       t = Thread(target=self.__send_msg_aux, args=(recipient, msg))
       t.start()
+      threads.append(t)
+    return threads
   
   def __send_msg_aux (self, recipient, msg):
       if not self.delay is None:
         sleep(self.delay)
       if self.packet_loss is None or randint(0, 100-1) > self.packet_loss:
         recipient.recv_msg(msg)
-      else:
-        recipient.recv_msg(None)
