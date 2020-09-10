@@ -57,7 +57,7 @@ class RangeSensor(Sensor):
         rot_sensor_to_ned = np.matmul(rot_body_to_ned, rot_sensor_to_body)
 
         pos_sensor_ned = state_host[0:3] + np.matmul(rot_body_to_ned, self.sensor_pos_bdy).reshape(3,1)
-        num_beams = np.int(self.arc_angle/self.angle_res)+1
+        num_beams = np.int(self.arc_angle/self.angle_res)+2
         beams = np.zeros([3,num_beams])
         #Trace different beams within the cone of the sensor
         for ind, ang in enumerate(np.arange(-self.arc_angle / 2, self.arc_angle / 2 + self.angle_res, self.angle_res)):
