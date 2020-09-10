@@ -1,7 +1,7 @@
 
 from abc import ABC, abstractmethod
 from time import sleep
-import threading
+from threading import Thread
 from random import seed, randint
 
 class CommunicationNode(ABC):
@@ -20,12 +20,12 @@ class CommunicationChannel():
     self.packet_loss = kwargs["packet_loss"] if "packet_loss" in kwargs else None
     seed()
   
-  def distribute_msg(self, sender, recipients, msg):
+  def send_msg(self, sender, recipients, msg):
     for recipient in list(filter(lambda recipient: self.com_filter(sender, recipient), recipients)):
-      t = threading.Thread(target=self.__distribute_msg_aux, args=(recipient, msg))
+      t = Thread(target=self.__send_msg_aux, args=(recipient, msg))
       t.start()
   
-  def __distribute_msg_aux (self, recipient, msg):
+  def __send_msg_aux (self, recipient, msg):
       if not self.delay is None:
         sleep(self.delay)
       if self.packet_loss is None or randint(0, 100-1) > self.packet_loss:

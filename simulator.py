@@ -1,15 +1,14 @@
 from environment import Environment
 from crazy_flie import CrazyFlie
 from range_sensor import RangeSensor
-from communication import CommunicationChannel
+from communication import CommunicationChannel, CommunicationNode
 from logger import Logger
 
 import numpy as np
 from enum import Enum
+from threading import Semaphore
 
-
-
-class Simulator():
+class Simulator(CommunicationNode):
 
   class SimulatorState(Enum):
     NORMAL = 0
@@ -61,3 +60,22 @@ class Simulator():
           ]
         ) for drone in drone_list
       }
+  
+  def revc_msg(self, msg_callback):
+    msg_callback()
+  
+  def sim_step(self, time_step):
+    
+    def set_sensor_data_for_drone(drone_id, sensor_data, sem):
+      self.drone_sensor_data[drone_id] = sensor_data
+      sem.release()
+
+    def set_state_for_drone(drone_id, drone_state, sem):
+      self.drone_state[drone_id] = drone_state
+      sem.release()
+
+    sem = Semaphore(0)
+    for d in self.drones:
+      d.update_state(self.commands[d.id])
+      self.com_channel.send_msg(sender = d, recipients = [self], msg_callback = set_sensor_data_for_drone(d.id, d.get_reading(self.environment), sem))
+      self.com_channel.send_msg(sender = d, recipients = [self], msg_callback = set_state_for_drone(d.id, d.state, sem))
