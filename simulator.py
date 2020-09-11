@@ -7,12 +7,6 @@ from logger import Logger
 import numpy as np
 from enum import Enum
 
-class Controller():
-  def __init__(self):
-    pass
-  def get_commands(self, states, measurements):
-    return np.zeros((6, 1))
-
 class Simulator(CommunicationNode):
 
   class SimulatorState(Enum):
@@ -89,7 +83,7 @@ class Simulator(CommunicationNode):
     self.commands = self.controller.get_commands(self.drone_states, self.drone_sensor_data)
     for d in self.drones:
       d.update_command(self.commands[d.id])
-      d.update_state(self.commands[d.id])
+      d.update_state(time_step)
 
 
 #def main():
