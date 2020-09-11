@@ -49,6 +49,6 @@ if __name__ == "__main__":
     cfs[i].update_command(commands[i])
 
   c = CommunicationChannel()
-  c.distribute_msg(cfs[0], cfs[1:4], "JADDA")
+  c.send_msg(cfs[0], cfs[1:4], "JADDA")
 
   run_animation(e, cfs)
