@@ -34,24 +34,41 @@ set_points = [state2[0:3,:],state4[0:3,:]]
 new_setpoints = [{"id":2, "set_point": state1[0:3,:]},
                  {"id":1, "set_point": state3[0:3,:]}]
 
-if __name__ == "__main__":
-  x_max, y_max = (200, 200)
-  e = Environment([[x == 0 or x == x_max-1 or y == 0 or y == y_max-1 for x in range(x_max)] for y in range(y_max)])
-  c = SwarmController(drones,set_points)
-  s = Simulator(e, drones=drones, controller=c)
 
+points1 = np.array([[0,0,16,16],[0,0,0,0],[0,3,0,3]])
+points2 = np.array([[0,0,0,0],[0,0,16,16],[0,3,0,3]])
+points3 = np.array([[16,16,16,16],[0,0,16,16],[0,3,0,3]])
+points4 = np.array([[0,0,16,16],[16,16,16,16],[0,3,0,3]])
+
+obj1 = {"shape": "rectangle","points":points1}
+obj2 = {"shape": "rectangle", "points": points2}
+obj3 = {"shape": "rectangle", "points": points3}
+obj4 = {"shape": "rectangle", "points": points4}
+
+objects = [obj1,obj2,obj3,obj4]
+
+env = Environment(objects)
+
+
+if __name__ == "__main__":
+  c = SwarmController(drones,set_points)
+  s = Simulator(env, drones=drones, controller=c)
+
+  """
   fig, ax = plt.subplots()
   ax.axis("equal")
-  e.plot(ax)
+  env.plot(ax)
   for cf in s.drones:
-    cf.plot(ax, e,plot_sensors=True)
+    cf.plot(ax, env,plot_sensors=True)
   plt.show(block=False)
+  """
   for i in range(300):
     if i == 70:
       c.update_set_points(new_setpoints)
     s.sim_step(0.05)
-
+    """
     for cf in s.drones:
-      cf.update_plot(e,plot_sensors=True)
+      cf.update_plot(env,plot_sensors=True)
     fig.canvas.draw()
     fig.canvas.flush_events()
+    """

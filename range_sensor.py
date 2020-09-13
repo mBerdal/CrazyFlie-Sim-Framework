@@ -5,6 +5,7 @@ from math import cos, sin, atan
 import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from utils.rotation_utils import rot_matrix_zyx
+from utils.raytracing import intersect_rectangle
 
 from environment import Environment
 
@@ -48,7 +49,7 @@ class RangeSensor(Sensor):
         self.sensor_pos_bdy = sensor_pos_bdy
         self.sensor_attitude_bdy = sensor_attitude_body
 
-    def get_reading(self, environment: Environment, state_host: np.ndarray, return_all_beams = False) -> np.ndarray:
+    def get_reading(self, objects, state_host: np.ndarray, return_all_beams = False) -> np.ndarray:
         # assert pos_host_NED.shape == (Environment.__SPATIAL_DIMS__, ), f"host position has shape {pos_host_NED.shape}, should be {(Environment.__SPATIAL_DIMS__, )}"
         #Get rotation from sensor fram to NED frame
         rot_sensor_to_body = rot_matrix_zyx(self.sensor_attitude_bdy.item(0), self.sensor_attitude_bdy.item(1),
@@ -56,7 +57,7 @@ class RangeSensor(Sensor):
         rot_body_to_ned = rot_matrix_zyx(state_host.item(3), state_host.item(4), state_host.item(5))
         rot_sensor_to_ned = np.matmul(rot_body_to_ned, rot_sensor_to_body)
 
-        pos_sensor_ned = state_host[0:3] + np.matmul(rot_body_to_ned, self.sensor_pos_bdy).reshape(3,1)
+        ray_orgin = state_host[0:3] + np.matmul(rot_body_to_ned, self.sensor_pos_bdy).reshape(3,1)
         num_beams = np.int(self.arc_angle/self.angle_res)+2
         beams = np.zeros([3,num_beams])
         #Trace different beams within the cone of the sensor
@@ -64,44 +65,36 @@ class RangeSensor(Sensor):
             #Get rotation matrix from beam frame to ned frame
             rot_beam_to_sensor = rot_matrix_zyx(0,0,ang)
             rot_beam_to_ned = np.matmul(rot_sensor_to_ned, rot_beam_to_sensor)
-            beam = self.trace_beam(environment,pos_sensor_ned,rot_beam_to_ned)
-            beams[:,ind] = beam.ravel()
+            ray_vector = rot_beam_to_ned @ np.array([1,0,0]).reshape(3,1)
+            beam = self.trace_beam(objects,ray_orgin,ray_vector)
+            if np.any(beam == np.inf):
+                beams[:,ind] = ((rot_beam_to_ned @ np.array([self.max_range,0,0]).reshape(3,1))).ravel()
+            else:
+                beams[:,ind] = beam.ravel()
         #Return the minimum of the beams
+
         if return_all_beams:
             return beams
         else:
             ind = np.argmin(np.linalg.norm(beams,axis=0))
             return beams[:,ind]
 
-    def trace_beam(self, environment: Environment, pos_sensor_ned: np.ndarray, rot_beam_to_ned: np.ndarray):
-        coarse_range = np.array([[min(environment.x_res, environment.y_res)], [0], [0]])
-        converged = False
-        coarse_beam = np.zeros((3, 1))
-        #Find the first instance that the beam enters an occupied cell
-        while not converged and coarse_beam[0] < self.max_range + coarse_range.item(0):
-            pos_beam_ned = np.matmul(rot_beam_to_ned, coarse_beam).reshape(3,1) + pos_sensor_ned
-            if environment[(pos_beam_ned.item(0), pos_beam_ned.item(1))]:
-                converged = True
-            else:
-                coarse_beam = coarse_beam + coarse_range
-        #Use binary search to refine the coarse measurment
-        if converged:
-            beam_lower = coarse_beam - coarse_range
-            beam_upper = coarse_beam
-            while (beam_upper - beam_lower)[0] > self.range_res:
-                midpoint_beam = (beam_upper - beam_lower) / 2 + beam_lower
-                pos_midpoint_ned = np.matmul(rot_beam_to_ned, midpoint_beam).reshape(3,1) + pos_sensor_ned
-                if environment[(pos_midpoint_ned.item(0), pos_midpoint_ned.item(1))]:
-                    beam_upper = midpoint_beam
-                else:
-                    beam_lower = midpoint_beam
-            return pos_midpoint_ned - pos_sensor_ned
-        else:
-            return pos_beam_ned - pos_sensor_ned
+    def trace_beam(self,objects, ray_orgin, ray_vector):
+        dist_min = np.inf
+        trace_min = np.inf*np.ones((3,1))
+        for obj in objects:
+            if obj["shape"] == "rectangle":
+                trace = intersect_rectangle(obj["points"],ray_orgin,ray_vector,self.max_range)
+                dist = np.linalg.norm(trace)
+                if dist < dist_min:
+                    dist_min = dist
+                    trace_min = trace
+        return trace_min
+
 
     def plot(self, axis, environment, state_host: np.ndarray) -> None:
         self.figs = []
-        beams = self.get_reading(environment,state_host,return_all_beams=True)
+        beams = self.get_reading(environment.get_objects(),state_host,return_all_beams=True)
         pos_host = state_host[0:3]
         for i in range(beams.shape[1]):
             self.figs.append(
@@ -112,7 +105,7 @@ class RangeSensor(Sensor):
             )
 
     def update_plot(self, environment, state_host: np.ndarray) -> None:
-        beams = self.get_reading(environment,state_host,return_all_beams=True)
+        beams = self.get_reading(environment.get_objects(),state_host,return_all_beams=True)
         i = 0
         pos_host = state_host[0:3]
         for i in range(beams.shape[1]):

@@ -51,37 +51,47 @@ class Environment():
 
   __SPATIAL_DIMS__ = 2
 
-  def __init__(self, occupancy_grid: List[List[bool]], map_resolution: Tuple = (0.08, 0.08)) -> None:
-    self.x_res, self.y_res = map_resolution
-    self.map = occupancy_grid
+  def __init__(self, objects: List) -> None:
+    self.objects = objects
 
-  def __getitem__(self, coords: Tuple) -> bool:
-    x, y = coords
-    assert(isinstance(x, float) or isinstance(x, int))\
-      and (isinstance(y, float) or isinstance(y, int))\
-      ,"slicing not supported. Use get_section to obtain section of environment"
-    try:
-      return self.map[floor(y/self.y_res)][floor(x/self.x_res)]
-    except IndexError as e:
-      print(f"Warning. Tried to look up coordinates ({x}m, {y}m) which is outside map. Returning True")
-      return True
+  def add_object(self, object):
+    self.objects.append(object)
 
-  def __setitem__(self, coords: Tuple, value) -> None:
-    x, y = coords
-    self.map[floor(y/self.y_res)][floor(x/self.x_res)] = value
-
-  def __delitem__(self, coords: Tuple) -> None:
-    x, y = coords
-    self.map[floor(y/self.y_res)][floor(x/self.x_res)] = False
-
-  def get_size(self):
-    try:
-      return len(self.map[0])*self.x_res, len(self.map)*self.y_res
-    except IndexError:
-      return 0, 0
+  def get_objects(self):
+    return self.objects.copy()
 
   def plot(self, axis: plt.Axes) -> None:
-    for y in range(len(self.map)):
-      for x in range(len(self.map[y])):
-        if self.map[y][x]:
-          axis.add_patch(patches.Rectangle((x*self.x_res, y*self.y_res), self.x_res, self.y_res))
+    for obj in self.objects:
+      points = get_2d_points(obj)
+      axis.plot(points[0,:], points[1,:],color="red")
+
+
+
+def get_2d_points(object):
+  if object["shape"] == "rectangle":
+    points = object['points']
+    points_unique = np.unique(points[0:2,:],axis=1)
+    return points_unique
+  else:
+    return None
+
+
+def main():
+  points1 = np.array([[0,0,10,10],[0,0,0,0],[0,3,0,3]])
+  points2 = np.array([[0,0,0,0],[0,0,10,10],[0,3,0,3]])
+  points3 = np.array([[10,10,10,10],[0,0,10,10],[0,3,0,3]])
+  points4 = np.array([[0,0,10,10],[10,10,10,10],[0,3,0,3]])
+
+  obj1 = {"shape": "rectangle","points":points1}
+  obj2 = {"shape": "rectangle", "points": points2}
+  obj3 = {"shape": "rectangle", "points": points3}
+  obj4 = {"shape": "rectangle", "points": points4}
+
+  objects = [obj1,obj2,obj3,obj4]
+
+  env = Environment(objects)
+
+  fig,axis = plt.subplots()
+
+  env.plot(axis)
+  plt.show()

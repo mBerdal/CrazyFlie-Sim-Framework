@@ -76,9 +76,9 @@ class CrazyFlie(Drone,CommunicationNode):
     readings = []
     for s in self.sensors:
       if vector_format:
-        readings.append(s.get_reading(env,self.state))
+        readings.append(s.get_reading(env.get_objects(),self.state))
       else:
-        readings.append(np.linalg.norm(s.get_reading(env,self.state)).item())
+        readings.append(np.linalg.norm(s.get_reading(env.get_objects(),self.state)).item())
     return readings
 
 
