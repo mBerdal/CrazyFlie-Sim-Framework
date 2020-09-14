@@ -5,22 +5,8 @@ from simulator import Simulator
 from controller import SwarmController
 
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import numpy as np
 
-def run_animation(environment, crazy_flies):
-  fig, ax = plt.subplots()
-  ax.axis("equal")
-  environment.plot(ax)
-  for cf in crazy_flies:
-    cf.plot(ax,environment)
-
-  def animate(i):
-    for ind, cf in enumerate(crazy_flies):
-      cf.update_state(0.10)
-      cf.update_plot(environment)
-  an = animation.FuncAnimation(fig, animate, frames=100, repeat=False)
-  plt.show()
 
 state1 = np.array([5,5,0,0,0,0]).reshape((6,1))
 state2 = np.array([10,5,0,0,0,0]).reshape((6,1))
@@ -39,36 +25,52 @@ points1 = np.array([[0,0,16,16],[0,0,0,0],[0,3,0,3]])
 points2 = np.array([[0,0,0,0],[0,0,16,16],[0,3,0,3]])
 points3 = np.array([[16,16,16,16],[0,0,16,16],[0,3,0,3]])
 points4 = np.array([[0,0,16,16],[16,16,16,16],[0,3,0,3]])
+points5 = np.array([[0,0,10,10],[10,10,10,10],[0,3,0,3]])
 
 obj1 = {"shape": "rectangle","points":points1}
 obj2 = {"shape": "rectangle", "points": points2}
 obj3 = {"shape": "rectangle", "points": points3}
 obj4 = {"shape": "rectangle", "points": points4}
+obj5 = {"shape": "rectangle", "points": points5}
 
 objects = [obj1,obj2,obj3,obj4]
 
+num_objects = 10
+new_objects = num_objects-len(objects)
+
+z1 = 0
+z2 = 3
+for _ in range(new_objects):
+  x1 = np.random.randint(0,16)
+  x2 = np.random.randint(0,16)
+  y1 = np.random.randint(0,16)
+  y2 = np.random.randint(0,16)
+
+  points = np.array([[x1,x1,x2,x2],[y1,y1,y2,y2],[z1,z2,z1,z2]])
+  obj_tmp = {"shape": "rectangle", "points": points}
+  objects.append(obj_tmp)
+
 env = Environment(objects)
 
-
+plot = True
 if __name__ == "__main__":
   c = SwarmController(drones,set_points)
   s = Simulator(env, drones=drones, controller=c)
 
-  """
-  fig, ax = plt.subplots()
-  ax.axis("equal")
-  env.plot(ax)
-  for cf in s.drones:
-    cf.plot(ax, env,plot_sensors=True)
-  plt.show(block=False)
-  """
+  if plot:
+    fig, ax = plt.subplots()
+    ax.axis("equal")
+    env.plot(ax)
+    for cf in s.drones:
+      cf.plot(ax, env,plot_sensors=True)
+    plt.show(block=False)
+
   for i in range(300):
     if i == 70:
       c.update_set_points(new_setpoints)
     s.sim_step(0.05)
-    """
-    for cf in s.drones:
-      cf.update_plot(env,plot_sensors=True)
-    fig.canvas.draw()
-    fig.canvas.flush_events()
-    """
+    if plot:
+      for cf in s.drones:
+        cf.update_plot(env,plot_sensors=True)
+      fig.canvas.draw()
+      fig.canvas.flush_events()

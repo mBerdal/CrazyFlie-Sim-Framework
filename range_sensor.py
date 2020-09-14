@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from utils.rotation_utils import rot_matrix_zyx
 from utils.raytracing import intersect_rectangle
-
+import multiprocessing as mp
 from environment import Environment
 
 
@@ -60,36 +60,27 @@ class RangeSensor(Sensor):
         ray_orgin = state_host[0:3] + np.matmul(rot_body_to_ned, self.sensor_pos_bdy).reshape(3,1)
         num_beams = np.int(self.arc_angle/self.angle_res)+2
         beams = np.zeros([3,num_beams])
+
         #Trace different beams within the cone of the sensor
+
         for ind, ang in enumerate(np.arange(-self.arc_angle / 2, self.arc_angle / 2 + self.angle_res, self.angle_res)):
             #Get rotation matrix from beam frame to ned frame
             rot_beam_to_sensor = rot_matrix_zyx(0,0,ang)
             rot_beam_to_ned = np.matmul(rot_sensor_to_ned, rot_beam_to_sensor)
             ray_vector = rot_beam_to_ned @ np.array([1,0,0]).reshape(3,1)
-            beam = self.trace_beam(objects,ray_orgin,ray_vector)
+            beam = trace_beam(objects,ray_orgin,ray_vector)
             if np.any(beam == np.inf):
                 beams[:,ind] = ((rot_beam_to_ned @ np.array([self.max_range,0,0]).reshape(3,1))).ravel()
             else:
                 beams[:,ind] = beam.ravel()
-        #Return the minimum of the beams
 
+        #Return the minimum of the beams
         if return_all_beams:
             return beams
         else:
             ind = np.argmin(np.linalg.norm(beams,axis=0))
             return beams[:,ind]
 
-    def trace_beam(self,objects, ray_orgin, ray_vector):
-        dist_min = np.inf
-        trace_min = np.inf*np.ones((3,1))
-        for obj in objects:
-            if obj["shape"] == "rectangle":
-                trace = intersect_rectangle(obj["points"],ray_orgin,ray_vector,self.max_range)
-                dist = np.linalg.norm(trace)
-                if dist < dist_min:
-                    dist_min = dist
-                    trace_min = trace
-        return trace_min
 
 
     def plot(self, axis, environment, state_host: np.ndarray) -> None:
@@ -114,6 +105,26 @@ class RangeSensor(Sensor):
                 [pos_host.item(1), pos_host.item(1) + beams.item(1, i)]
             )
 
+def trace_beam(objects, ray_orgin, ray_vector):
+    dist_min = np.inf
+    trace_min = np.inf*np.ones((3,1))
+    for obj in objects:
+        if obj["shape"] == "rectangle":
+            trace = intersect_rectangle(obj["points"],ray_orgin,ray_vector,4)
+            dist = np.linalg.norm(trace)
+            if dist < dist_min:
+                dist_min = dist
+                trace_min = trace
+    return trace_min
+
+def trace_beam_mp(objects,ray_orgin, ray_vector):
+    pool = mp.Pool(mp.cpu_count())
+    mp.Value('d', 0.0)
+    traces = [pool.apply(intersect_rectangle,args=(obj["points"],ray_orgin,ray_vector,4)) for obj in objects]
+    pool.close()
+    traces = np.array(traces).squeeze().transpose()
+    ind = np.argmin(np.linalg.norm(traces, axis=0))
+    return traces[:,ind]
 
 class ZeroRangeException(Exception):
     def __init__(self, msg="Zero range detected"):

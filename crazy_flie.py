@@ -30,7 +30,7 @@ class CrazyFlie(Drone,CommunicationNode):
     max_range_sensor = kwargs.get('max_range_sensor', 4)
     range_res_sensor = kwargs.get('range_res_sensor',0.001)
     arc_angle_sensor = kwargs.get("arc_angle_sensor",np.deg2rad(27))
-    num_beams_sensor = kwargs.get("num_beams_sensor",9)
+    num_beams_sensor = kwargs.get("num_beams_sensor",5)
     arc_res_sensor = arc_angle_sensor/num_beams_sensor
 
     attitude_body1 = np.array([0, 0, np.pi]).reshape(3, 1)

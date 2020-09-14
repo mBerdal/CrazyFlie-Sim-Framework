@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+import multiprocessing as mp
+import time
 
 def intersect_plane(p0: np.ndarray, n: np.ndarray, c: np.ndarray, p: np.ndarray):
     denom = np.dot(p-c,n)
@@ -35,7 +37,7 @@ def ray_intersect_triangle(ray_orgin: np.ndarray,ray_vector: np.ndarray, triangl
 
     edge1 = vertex1-vertex0
     edge2 = vertex2-vertex0
-    h = np.cross(ray_vector,edge2)
+    h = cross_product(ray_vector,edge2)
     a = edge1.dot(h)
 
     if (a > -eps and a < eps):
@@ -49,7 +51,7 @@ def ray_intersect_triangle(ray_orgin: np.ndarray,ray_vector: np.ndarray, triangl
     if (u < 0.0 or u > 1.0):
         return np.inf*np.ones((3,1))
 
-    q = np.cross(s,edge1)
+    q = cross_product(s,edge1)
     v = f*ray_vector.dot(q)
     if (v < 0.0 or u + v > 1.0):
         return np.inf*np.ones((3,1))
@@ -61,6 +63,49 @@ def ray_intersect_triangle(ray_orgin: np.ndarray,ray_vector: np.ndarray, triangl
         return np.inf*np.ones((3,1))
 
 
+def cross_product(x,y):
+    z = np.array([0,0,0],np.float)
+    z[0] = x[1]*y[2] - x[2]*y[1]
+    z[1] = x[2]*y[0] - x[0]*y[2]
+    z[2] = x[0]*y[1] - x[1]*y[0]
+    return z
+
+
+
+def test_mp():
+    objects = []
+    for _ in range(10000):
+        x1 = np.random.randint(0, 100)
+        x2 = np.random.randint(0, 100)
+        y1 = np.random.randint(0, 100)
+        y2 = np.random.randint(0, 100)
+        z1 = np.random.randint(0, 100)
+        z2 = np.random.randint(0, 100)
+        points = np.array([[x1, x1, x2, x2], [y1, y1, y2, y2], [z1, z2, z1, z2]])
+        obj_tmp = {"shape": "rectangle", "points": points}
+        objects.append(obj_tmp)
+
+    ray_orgin = np.array([0,0,0])
+    ray_vector = np.array([1,0,0])
+    start_t = time.time()
+    inter = []
+    for obj in objects:
+        p = intersect_rectangle(obj["points"],ray_orgin,ray_vector,4)
+        inter.append(p)
+    end_time = time.time()
+    print(end_time-start_t)
+    print(inter[0:10])
+    pool = mp.Pool(mp.cpu_count())
+    start_t = time.time()
+    res = [pool.apply(intersect_rectangle,args=[obj["points"],ray_orgin,ray_vector,4]) for obj in objects]
+    pool.close()
+    end_time = time.time()
+    print(end_time - start_t)
+    print(res[0:10])
+
+
+
+#test_mp()
 """
 vertex1  = np.array([0,0,0])
 vertex2 = np.array([0,0,5])

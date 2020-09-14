@@ -85,16 +85,3 @@ class Simulator(CommunicationNode):
       d.update_command(self.commands[d.id])
       d.update_state(time_step)
 
-
-#def main():
-#  e = Environment([
-#    [True, False],
-#    [True, False],
-#  ], map_resolution=(1, 1))
-#  c = Controller()
-#  s = Simulator(e, drones = [{"id": 1, "state": np.zeros((6, 1))}], controller = c)
-#  for _ in range(1000):
-#    s.sim_step(0.10)
-#
-#main()
-    
