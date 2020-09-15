@@ -25,6 +25,17 @@ def intersect_rectangle(rectangle: np.ndarray, ray_orgin: np.ndarray, ray_vector
     else:
         return tri1
 
+def multi_intersect_rectangle(rectangle, ray_orgins, ray_vectors, max_range):
+    tri1 = multi_ray_intersect_triangle(ray_orgins, ray_vectors, rectangle[:, 0:3], max_range)
+    tm = np.any(tri1==np.inf,axis=1)
+    if np.any(tm):
+        tri2 = multi_ray_intersect_triangle(ray_orgins, ray_vectors, rectangle[:, 1:4], max_range)
+    else:
+        return tri1
+    tri1[tm] = tri2[tm]
+    return tri1
+
+
 
 def ray_intersect_triangle(ray_orgin: np.ndarray,ray_vector: np.ndarray, triangle:np.ndarray, max_range: float):
 
@@ -63,6 +74,61 @@ def ray_intersect_triangle(ray_orgin: np.ndarray,ray_vector: np.ndarray, triangl
         return np.inf*np.ones((3,1))
 
 
+def multi_ray_intersect_triangle(ray_orgins, ray_vectors,triangle, max_range,return_t = True):
+    n = ray_orgins.shape[0]
+    truth_array = np.zeros(n,bool)
+    eps = 1e-6
+    vertex0 = triangle[:, 0]
+    vertex1 = triangle[:, 1]
+    vertex2 = triangle[:, 2]
+
+    edge1 = vertex1 - vertex0
+    edge2 = vertex2 - vertex0
+    h = np.cross(ray_vectors, edge2)
+    a = np.dot(h,edge1)
+
+    tm1 = a>-eps
+    tm2 = a<eps
+    tm = tm1 & tm2
+    truth_array[tm] = True
+    a[truth_array] = np.inf
+    f = 1.0/a
+    s = ray_orgins - vertex0
+
+    #u = f*np.dot(s,h)
+    u = f*np.einsum('ij,ij->i', s, h)
+
+    tm1 = u<0.0
+    tm2 = u>1.0
+    tm = tm1 | tm2
+    truth_array[tm] = True
+
+    q = np.cross(s,edge1)
+    v = f*np.einsum('ij,ij->i', ray_vectors, q)
+
+    tm1 = v < 0.0
+    tm2 = v + u > 1.0
+    tm = tm1 | tm2
+    truth_array[tm] = True
+
+    t = f * np.dot(q,edge2)
+
+    tm1 = t < eps
+    tm2 = t > max_range
+    tm = tm1 | tm2
+    truth_array[tm] = True
+
+    if return_t:
+        t[truth_array] = np.inf
+        return t
+    else:
+        results = t.reshape(n,1)*ray_vectors
+        results[truth_array] = np.ones(3)*np.inf
+        return results
+
+
+
+
 def cross_product(x,y):
     z = np.array([0,0,0],np.float)
     z[0] = x[1]*y[2] - x[2]*y[1]
@@ -71,17 +137,49 @@ def cross_product(x,y):
     return z
 
 
+def test_multiray():
+    num_test = 1000000
+    x1 = 5
+    x2 = 5
+    y1 = 0
+    y2 = 5
+    z1 = 0
+    z2 = 3
+    points = np.array([[x1, x1, x2], [y1, y1, y2], [z1, z2, z1]],np.float)
+
+    orgins = np.random.rand(num_test,3)
+    vectors = np.zeros((num_test, 3))
+    for i in range(num_test):
+        vec = np.random.rand(1,3)
+        vectors[i,:] = vec/np.linalg.norm(vec)
+
+    res1 = []
+    start_time = time.time()
+    for i in range(len(orgins)):
+        res1.append(ray_intersect_triangle(orgins[i,:],vectors[i,:],points,10))
+    end_time = time.time()
+    print(end_time-start_time)
+    res1 = np.array(res1)
+    start_time = time.time()
+    res2 = multi_ray_intersect_triangle(np.array(orgins,np.float),np.array(vectors,np.float),points,10)
+    end_time = time.time()
+    print(end_time-start_time)
+    print(res1[0:10])
+    print(res2[0:10])
 
 def test_mp():
     objects = []
-    for _ in range(10000):
+    points_list = []
+    num_points = 10000
+    for _ in range(num_points):
         x1 = np.random.randint(0, 100)
         x2 = np.random.randint(0, 100)
         y1 = np.random.randint(0, 100)
         y2 = np.random.randint(0, 100)
         z1 = np.random.randint(0, 100)
         z2 = np.random.randint(0, 100)
-        points = np.array([[x1, x1, x2, x2], [y1, y1, y2, y2], [z1, z2, z1, z2]])
+        points = np.array([[x1, x1, x2], [y1, y1, y2], [z1, z2, z1]])
+        points_list.append(points)
         obj_tmp = {"shape": "rectangle", "points": points}
         objects.append(obj_tmp)
 
@@ -90,22 +188,24 @@ def test_mp():
     start_t = time.time()
     inter = []
     for obj in objects:
-        p = intersect_rectangle(obj["points"],ray_orgin,ray_vector,4)
+        p = ray_intersect_triangle(ray_orgin,ray_vector,obj["points"],4)
         inter.append(p)
     end_time = time.time()
     print(end_time-start_t)
-    print(inter[0:10])
-    pool = mp.Pool(mp.cpu_count())
-    start_t = time.time()
-    res = [pool.apply(intersect_rectangle,args=[obj["points"],ray_orgin,ray_vector,4]) for obj in objects]
-    pool.close()
+    maneger = mp.Manager()
+
+    def wrapper_intersect(points):
+        return intersect_rectangle(points,ray_orgin,ray_vector,4)
+
+    with mp.Pool(mp.cpu_count()) as pool:
+        start_t = time.time()
+        res = [pool.apply_async(intersect_rectangle,args=[p,ray_orgin,ray_vector,4]) for p in points]
+        results = [r.get() for r in res]
     end_time = time.time()
     print(end_time - start_t)
-    print(res[0:10])
 
 
 
-#test_mp()
 """
 vertex1  = np.array([0,0,0])
 vertex2 = np.array([0,0,5])

@@ -8,6 +8,46 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+num_drones = 10
+x_lim_l = 0
+x_lim_u = 16
+
+y_lim_l = 0
+y_lim_u = 16
+
+z_lim_l = 0
+z_lim_u = 3
+
+yaw_lim_l = -np.pi
+yaw_lim_u = np.pi
+
+drones = []
+set_points = []
+
+for i in range(num_drones):
+  x = np.random.uniform(x_lim_l,x_lim_u)
+  y = np.random.uniform(y_lim_l,y_lim_u)
+  z = np.random.uniform(z_lim_l,z_lim_u)
+  yaw = np.random.uniform(yaw_lim_l,yaw_lim_u)
+  state = np.array([x,y,z,0,0,yaw]).reshape((6,1))
+  drones.append({"id":i,"state":state})
+  x_set = np.random.uniform(x_lim_l,x_lim_u)
+  y_set = np.random.uniform(y_lim_l,y_lim_u)
+  z_set = np.random.uniform(z_lim_l,z_lim_u)
+  sp = np.array([x_set,y_set,z_set]).reshape(3,1)
+  set_points.append(sp)
+
+def generate_set_points():
+  new_set_points = []
+  for i in range(num_drones):
+    x_set = np.random.uniform(x_lim_l, x_lim_u)
+    y_set = np.random.uniform(y_lim_l, y_lim_u)
+    z_set = np.random.uniform(z_lim_l, z_lim_u)
+    sp = np.array([x_set, y_set, z_set]).reshape(3, 1)
+    new_set_points.append({"id": i,"set_point":sp})
+  return new_set_points
+
+"""
 state1 = np.array([5,5,0,0,0,0]).reshape((6,1))
 state2 = np.array([10,5,0,0,0,0]).reshape((6,1))
 state3 = np.array([2,5,0,0,0,0]).reshape((6,1))
@@ -19,7 +59,7 @@ drones = [{"id": 1, "state": state1},
 set_points = [state2[0:3,:],state4[0:3,:]]
 new_setpoints = [{"id":2, "set_point": state1[0:3,:]},
                  {"id":1, "set_point": state3[0:3,:]}]
-
+"""
 
 points1 = np.array([[0,0,16,16],[0,0,0,0],[0,3,0,3]])
 points2 = np.array([[0,0,0,0],[0,0,16,16],[0,3,0,3]])
@@ -35,7 +75,7 @@ obj5 = {"shape": "rectangle", "points": points5}
 
 objects = [obj1,obj2,obj3,obj4]
 
-num_objects = 10
+num_objects = 4
 new_objects = num_objects-len(objects)
 
 z1 = 0
@@ -50,27 +90,31 @@ for _ in range(new_objects):
   obj_tmp = {"shape": "rectangle", "points": points}
   objects.append(obj_tmp)
 
-env = Environment(objects)
+env = Environment()
 
-plot = True
+for o in objects:
+  env.add_object(o)
+
+plot = False
+
 if __name__ == "__main__":
   c = SwarmController(drones,set_points)
   s = Simulator(env, drones=drones, controller=c)
 
+
   if plot:
     fig, ax = plt.subplots()
     ax.axis("equal")
-    env.plot(ax)
-    for cf in s.drones:
-      cf.plot(ax, env,plot_sensors=True)
+    s.plot(ax)
     plt.show(block=False)
 
-  for i in range(300):
-    if i == 70:
-      c.update_set_points(new_setpoints)
+
+  for i in range(1000):
+    if i % 100 == 0 and i != 0:
+      new_sp = generate_set_points()
+      c.update_set_points(new_sp)
     s.sim_step(0.05)
     if plot:
-      for cf in s.drones:
-        cf.update_plot(env,plot_sensors=True)
+      s.update_plot(ax)
       fig.canvas.draw()
       fig.canvas.flush_events()

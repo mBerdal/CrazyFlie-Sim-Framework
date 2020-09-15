@@ -39,49 +39,34 @@ class RangeSensor(Sensor):
       than max_range and within field of view it returns None
     """
 
-    def __init__(self, max_range: float, range_res: float, arc_angle: float, angle_res: float,
+    def __init__(self, max_range: float, range_res: float, arc_angle: float, num_rays: float,
                  sensor_pos_bdy: np.ndarray, sensor_attitude_body: np.ndarray) -> None:
         super().__init__()
         self.max_range = max_range
         self.range_res = range_res
         self.arc_angle = arc_angle
-        self.angle_res = angle_res
+        self.num_rays = num_rays
         self.sensor_pos_bdy = sensor_pos_bdy
         self.sensor_attitude_bdy = sensor_attitude_body
+        self.ray_vectors, self.ray_orgins = self.calculate_ray_vectors()
 
     def get_reading(self, objects, state_host: np.ndarray, return_all_beams = False) -> np.ndarray:
-        # assert pos_host_NED.shape == (Environment.__SPATIAL_DIMS__, ), f"host position has shape {pos_host_NED.shape}, should be {(Environment.__SPATIAL_DIMS__, )}"
-        #Get rotation from sensor fram to NED frame
+        pass
+
+    def get_ray_vectors(self):
+        return self.ray_vectors, self.ray_orgins
+
+    def calculate_ray_vectors(self):
         rot_sensor_to_body = rot_matrix_zyx(self.sensor_attitude_bdy.item(0), self.sensor_attitude_bdy.item(1),
                                             self.sensor_attitude_bdy.item(2))
-        rot_body_to_ned = rot_matrix_zyx(state_host.item(3), state_host.item(4), state_host.item(5))
-        rot_sensor_to_ned = np.matmul(rot_body_to_ned, rot_sensor_to_body)
-
-        ray_orgin = state_host[0:3] + np.matmul(rot_body_to_ned, self.sensor_pos_bdy).reshape(3,1)
-        num_beams = np.int(self.arc_angle/self.angle_res)+2
-        beams = np.zeros([3,num_beams])
-
-        #Trace different beams within the cone of the sensor
-
-        for ind, ang in enumerate(np.arange(-self.arc_angle / 2, self.arc_angle / 2 + self.angle_res, self.angle_res)):
+        vectors = np.zeros((3,self.num_rays))
+        for ind, ang in enumerate(np.linspace(-self.arc_angle/2,self.arc_angle/2,self.num_rays)):
             #Get rotation matrix from beam frame to ned frame
-            rot_beam_to_sensor = rot_matrix_zyx(0,0,ang)
-            rot_beam_to_ned = np.matmul(rot_sensor_to_ned, rot_beam_to_sensor)
-            ray_vector = rot_beam_to_ned @ np.array([1,0,0]).reshape(3,1)
-            beam = trace_beam(objects,ray_orgin,ray_vector)
-            if np.any(beam == np.inf):
-                beams[:,ind] = ((rot_beam_to_ned @ np.array([self.max_range,0,0]).reshape(3,1))).ravel()
-            else:
-                beams[:,ind] = beam.ravel()
-
-        #Return the minimum of the beams
-        if return_all_beams:
-            return beams
-        else:
-            ind = np.argmin(np.linalg.norm(beams,axis=0))
-            return beams[:,ind]
-
-
+            rot_ray_to_sensor = rot_matrix_zyx(0,0,ang)
+            rot_ray_to_body = np.matmul(rot_sensor_to_body, rot_ray_to_sensor)
+            vectors[:,ind] = rot_ray_to_body @ np.array([1,0,0])
+        orgins = np.array([self.sensor_pos_bdy]*self.num_rays,np.float).squeeze().transpose()
+        return vectors, orgins
 
     def plot(self, axis, environment, state_host: np.ndarray) -> None:
         self.figs = []
@@ -105,27 +90,6 @@ class RangeSensor(Sensor):
                 [pos_host.item(1), pos_host.item(1) + beams.item(1, i)]
             )
 
-def trace_beam(objects, ray_orgin, ray_vector):
-    dist_min = np.inf
-    trace_min = np.inf*np.ones((3,1))
-    for obj in objects:
-        if obj["shape"] == "rectangle":
-            trace = intersect_rectangle(obj["points"],ray_orgin,ray_vector,4)
-            dist = np.linalg.norm(trace)
-            if dist < dist_min:
-                dist_min = dist
-                trace_min = trace
-    return trace_min
-
-def trace_beam_mp(objects,ray_orgin, ray_vector):
-    pool = mp.Pool(mp.cpu_count())
-    mp.Value('d', 0.0)
-    traces = [pool.apply(intersect_rectangle,args=(obj["points"],ray_orgin,ray_vector,4)) for obj in objects]
-    pool.close()
-    traces = np.array(traces).squeeze().transpose()
-    ind = np.argmin(np.linalg.norm(traces, axis=0))
-    return traces[:,ind]
-
 class ZeroRangeException(Exception):
     def __init__(self, msg="Zero range detected"):
         self.msg = msg
@@ -136,3 +100,18 @@ class FullRangeException(Exception):
     def __init__(self, msg="Nothing detected within range"):
         self.msg = msg
         super().__init__(msg)
+
+
+def test():
+    max_range_sensor = 4
+    range_res_sensor = 0.01
+    arc_angle_sensor = np.deg2rad(27)
+    num_beams = 9
+    attitude_body1 = np.array([0, 0, np.pi]).reshape(3, 1)
+    pos_body1 = np.array([0.01, 1, 0]).reshape(3, 1)
+    sensor1 = RangeSensor(max_range_sensor, range_res_sensor, arc_angle_sensor, num_beams, pos_body1,
+                          attitude_body1)
+    ray, orgin = sensor1.get_ray_vectors()
+    print(orgin.dtype)
+
+
