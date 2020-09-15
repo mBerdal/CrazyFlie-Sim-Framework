@@ -7,8 +7,11 @@ from controller import SwarmController
 import matplotlib.pyplot as plt
 import numpy as np
 
+np.random.seed(0)
+num_drones = 1000
+plot = False
+steps = 1000
 
-num_drones = 10
 x_lim_l = 0
 x_lim_u = 16
 
@@ -18,8 +21,8 @@ y_lim_u = 16
 z_lim_l = 0
 z_lim_u = 3
 
-yaw_lim_l = -np.pi
-yaw_lim_u = np.pi
+yaw_lim_l = -np.pi/4
+yaw_lim_u = np.pi/4
 
 drones = []
 set_points = []
@@ -95,7 +98,6 @@ env = Environment()
 for o in objects:
   env.add_object(o)
 
-plot = False
 
 if __name__ == "__main__":
   c = SwarmController(drones,set_points)
@@ -108,11 +110,13 @@ if __name__ == "__main__":
     s.plot(ax)
     plt.show(block=False)
 
+  print("Starting simulation!")
+  for i in range(steps):
 
-  for i in range(1000):
     if i % 100 == 0 and i != 0:
       new_sp = generate_set_points()
       c.update_set_points(new_sp)
+    print("Simulating step:",i+1,"of",steps)
     s.sim_step(0.05)
     if plot:
       s.update_plot(ax)

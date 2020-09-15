@@ -113,32 +113,35 @@ class Simulator(CommunicationNode):
     reading = t_min.reshape(-1,1)*rays
     return reading, orgins , idx_drones
 
-  def plot(self,ax):
+  def plot(self,ax,plot_sensors=False):
     self.figs_drones = []
-    rays, orgins, idx_drones = self.read_range_sensors()
+
     self.environment.plot(ax)
     for d in self.drones:
       self.figs_drones.append(
       ax.plot(d.state[0],d.state[1],"go")
       )
-    self.figs_rays = []
-    for i in range(rays.shape[0]):
-      ray = rays[i,:]
-      orgin = orgins[i,:]
-      self.figs_rays.append(
-      ax.plot([orgin[0],orgin[0]+ray[0]],[orgin[1],orgin[1]+ray[1]],"r")
-      )
+    if plot_sensors:
+      self.figs_rays = []
+      rays, orgins, idx_drones = self.read_range_sensors()
+      for i in range(rays.shape[0]):
+        ray = rays[i,:]
+        orgin = orgins[i,:]
+        self.figs_rays.append(
+        ax.plot([orgin[0],orgin[0]+ray[0]],[orgin[1],orgin[1]+ray[1]],"r")
+        )
 
-  def update_plot(self,ax):
+  def update_plot(self,ax,plot_sensors=False):
     for ind, d in enumerate(self.drones):
       self.figs_drones[ind][0].set_data(d.state[0],d.state[1])
-    rays, orgins, idx_drones = self.read_range_sensors()
-    for i in range(rays.shape[0]):
-      ray = rays[i, :]
-      orgin = orgins[i, :]
-      self.figs_rays[i][0].set_data(
-        [orgin[0], orgin[0] + ray[0]], [orgin[1], orgin[1] + ray[1]]
-      )
+    if plot_sensors:
+      rays, orgins, idx_drones = self.read_range_sensors()
+      for i in range(rays.shape[0]):
+        ray = rays[i, :]
+        orgin = orgins[i, :]
+        self.figs_rays[i][0].set_data(
+          [orgin[0], orgin[0] + ray[0]], [orgin[1], orgin[1] + ray[1]]
+        )
 
   def get_rays(self):
     rays = []

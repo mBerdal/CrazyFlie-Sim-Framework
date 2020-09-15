@@ -4,8 +4,8 @@ from environment import Environment
 from communication import CommunicationNode
 from utils.rotation_utils import rot_matrix_zyx, angular_transformation_matrix_zyx
 from drone import Drone
-
 import numpy as np
+from math import pi
 from typing import List
 
 class CrazyFlie(Drone,CommunicationNode):
@@ -80,8 +80,7 @@ class CrazyFlie(Drone,CommunicationNode):
     T = angular_transformation_matrix_zyx(self.state.item(3),self.state.item(4))
 
     trans = self.state[0:3] + time_step * np.matmul(R, self.state_dot[0:3].reshape(3,1))
-    anggular = np.unwrap(self.state[3:6] + time_step * np.matmul(T, self.state_dot[3:6].reshape(3,1)))
-
+    anggular = unwrap(self.state[3:6] + time_step * np.matmul(T, self.state_dot[3:6].reshape(3,1)))
     self.state = np.concatenate([trans,anggular]).reshape(6,1)
 
 
@@ -113,6 +112,13 @@ class CrazyFlie(Drone,CommunicationNode):
         if isinstance(s, RangeSensor):
           s.update_plot(environment,self.state)
 
+
+def unwrap(angles):
+  ang = np.zeros((3,1))
+  ang[0] = ((angles[0]) % 2*pi)
+  ang[1] = ((angles[1]) % 2*pi)
+  ang[2] = ((angles[2]) % 2*pi)
+  return ang
 
 def test():
   state = np.array([5, 5, 0, 0, 0, 0]).reshape((6, 1))

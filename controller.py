@@ -10,7 +10,7 @@ class Controller(ABC):
 class DroneControllerPosPI(Controller):
     def __init__(self,pos_d: np.ndarray,**kwargs):
         self.pos_d = pos_d
-        self.kp = kwargs.get("kp",0.3)
+        self.kp = kwargs.get("kp",0.5)
         self.ki = kwargs.get("ki",0.001)
         self.error_int = np.zeros((3,1))
 
@@ -28,6 +28,7 @@ class DroneControllerPosPI(Controller):
 
     def update_set_point(self,set_point):
         self.pos_d = set_point
+        self.error_int = np.zeros((3,1))
 
 
 class SwarmController(Controller):
