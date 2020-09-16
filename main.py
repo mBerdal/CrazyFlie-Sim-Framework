@@ -10,6 +10,7 @@ import numpy as np
 np.random.seed(0)
 num_drones = 1000
 plot = False
+plot_rays = True
 steps = 1000
 
 x_lim_l = 0
@@ -107,7 +108,7 @@ if __name__ == "__main__":
   if plot:
     fig, ax = plt.subplots()
     ax.axis("equal")
-    s.plot(ax)
+    s.plot(ax,plot_sensors=plot_rays)
     plt.show(block=False)
 
   print("Starting simulation!")
@@ -119,6 +120,6 @@ if __name__ == "__main__":
     print("Simulating step:",i+1,"of",steps)
     s.sim_step(0.05)
     if plot:
-      s.update_plot(ax)
+      s.update_plot(ax,plot_sensors=plot_rays)
       fig.canvas.draw()
       fig.canvas.flush_events()

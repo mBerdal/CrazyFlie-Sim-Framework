@@ -64,7 +64,7 @@ class CrazyFlie(Drone,CommunicationNode):
     print(msg)
 
   def get_sensor_rays(self):
-    rot_body_to_ned = rot_matrix_zyx(self.state.item(3),self.state.item(4),self.state.item(5))
+    rot_body_to_ned = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])
     rays = rot_body_to_ned @ self.rays
     orgins = rot_body_to_ned @ self.orgins + self.state[0:3]
     return rays, orgins
@@ -74,19 +74,16 @@ class CrazyFlie(Drone,CommunicationNode):
 
   def update_state(self, time_step):
     self.update_state_dot(time_step)
-    self.prev_state = self.state
+    R = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])
+    T = angular_transformation_matrix_zyx(self.state[3],self.state[4])
 
-    R = rot_matrix_zyx(self.state.item(3),self.state.item(4),self.state.item(5))
-    T = angular_transformation_matrix_zyx(self.state.item(3),self.state.item(4))
-
-    trans = self.state[0:3] + time_step * np.matmul(R, self.state_dot[0:3].reshape(3,1))
-    anggular = unwrap(self.state[3:6] + time_step * np.matmul(T, self.state_dot[3:6].reshape(3,1)))
-    self.state = np.concatenate([trans,anggular]).reshape(6,1)
+    self.state[0:3] = self.state[0:3] + time_step * (R @ self.state_dot[0:3])
+    self.state[3:6] = unwrap(self.state[3:6] + time_step * (T @ self.state_dot[3:6]))
+    #self.state = np.concatenate([trans,anggular])
 
 
   def update_state_dot(self, time_step):
-    self.prev_state_dot = self.state_dot
-    self.state_dot = self.state_dot + time_step*np.clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)
+    self.state_dot = self.state_dot + time_step*clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)
 
   def read_sensors(self, env: Environment, vector_format=True):
     readings = []
@@ -114,11 +111,19 @@ class CrazyFlie(Drone,CommunicationNode):
 
 
 def unwrap(angles):
-  ang = np.zeros((3,1))
-  ang[0] = ((angles[0]) % 2*pi)
-  ang[1] = ((angles[1]) % 2*pi)
-  ang[2] = ((angles[2]) % 2*pi)
-  return ang
+  angles[0] = angles[0] % 2*pi if angles[0] > 2*pi or angles[0] < 0 else angles[0]
+  angles[1] = angles[1] % 2*pi if angles[1] > 2*pi or angles[1] < 0 else angles[1]
+  angles[2] = angles[2] % 2*pi if angles[2] > 2*pi or angles[2] < 0 else angles[2]
+  return angles
+
+def clip(array, lower_bound, upper_bound):
+  array[0] = max(min(array[0], upper_bound[0]), lower_bound[0])
+  array[1] = max(min(array[1], upper_bound[1]), lower_bound[1])
+  array[2] = max(min(array[2], upper_bound[2]), lower_bound[2])
+  array[3] = max(min(array[3], upper_bound[3]), lower_bound[3])
+  array[4] = max(min(array[4], upper_bound[4]), lower_bound[4])
+  array[5] = max(min(array[5], upper_bound[5]), lower_bound[5])
+  return array
 
 def test():
   state = np.array([5, 5, 0, 0, 0, 0]).reshape((6, 1))
