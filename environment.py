@@ -51,17 +51,19 @@ class Environment():
 
   __SPATIAL_DIMS__ = 2
 
-  def __init__(self) -> None:
-      self.objects = []
+  def __init__(self, objects = []) -> None:
+    self.objects = []
+    for o in objects:
+      self.add_object(o)
 
-  def add_object(self, object):
-    if object["shape"] == "rectangle":
-      self.add_rectangle(object)
+  def add_object(self, obj):
+    if obj["shape"] == "rectangle":
+      self.add_rectangle(obj)
 
-  def add_rectangle(self, object):
-    assert object["shape"] == "rectangle"
-    self.objects.append({"shape": "triangle","points":object["points"][:,0:3]})
-    self.objects.append({"shape": "triangle","points": object["points"][:, 1:4]})
+  def add_rectangle(self, obj):
+    assert obj["shape"] == "rectangle"
+    self.objects.append({"shape": "triangle","points":obj["points"][:,0:3]})
+    self.objects.append({"shape": "triangle","points": obj["points"][:, 1:4]})
 
   def get_objects(self):
     return self.objects.copy()
@@ -70,8 +72,6 @@ class Environment():
     for obj in self.objects:
       points = get_2d_points(obj)
       axis.plot(points[0,:], points[1,:],color="red")
-
-
 
 def get_2d_points(object):
   if object["shape"] == "rectangle":

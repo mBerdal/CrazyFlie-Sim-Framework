@@ -63,13 +63,18 @@ class Logger():
       trajectories = data["trajectories"]
       for timestep in trajectories:
         for entry in trajectories[timestep]:
-          entry["state"] = np.array([entry["state"]])
+          entry["state"] = np.array(entry["state"])
 
-      environment = data["environment"]
-      if "filename" in environment.keys():
-        environment = read_json(environment["filename"])
+      env_dict = data["environment"]
+      env_objects = None
+      if "path" in env_dict.keys():
+        env_objects = read_json(env_dict["path"])
+      elif "objects" in env_dict.keys():
+        env_objects = [{"shape": obj["shape"], "points": np.array(obj["points"])} for obj in env_dict["objects"]]
+      else:
+        raise Warning("Invalid environment argument in file")
       
-      return Environment(environment["grid"], (environment["x_res"], environment["y_res"])), trajectories
+      return Environment(env_objects), trajectories
       
     except FileNotFoundError as fnfe:
       print(fnfe)
@@ -88,14 +93,21 @@ class Logger():
     assert not filename is None, "filename not supplied. save_log failed"
     assert isinstance(self.environment, str)\
       or isinstance(self.environment, Environment), "environment must be either a string or an Environment object. save_log failed"
-
-    env_val = self.environment if isinstance(self.environment, str) else {
-          "grid": self.environment.map,
-          "x_res": self.environment.x_res,
-          "y_res": self.environment.y_res
-        }
-
     write_json(filename, {
-      "environment": env_val,
+      "environment": {"path": self.environment} if isinstance(self.environment, str) else {
+        "objects": [
+          {
+            "shape": obj["shape"],
+            "points": obj["points"].tolist()
+          } for obj in self.environment.objects
+        ]
+      },
       "trajectories": self.trajectories
     })
+
+def main():
+  env, trajs = Logger().read_log("log_test_v1.txt")
+  print(env)
+  print(trajs)
+
+main()

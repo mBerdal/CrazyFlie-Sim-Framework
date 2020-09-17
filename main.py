@@ -11,7 +11,7 @@ np.random.seed(0)
 num_drones = 1000
 plot = False
 plot_rays = True
-steps = 1000
+steps = 2
 
 x_lim_l = 0
 x_lim_u = 16
@@ -102,7 +102,7 @@ for o in objects:
 
 if __name__ == "__main__":
   c = SwarmController(drones,set_points)
-  s = Simulator(env, drones=drones, controller=c)
+  s = Simulator(env, drones=drones, controller=c, log_sim=True)
 
 
   if plot:
@@ -118,8 +118,9 @@ if __name__ == "__main__":
       new_sp = generate_set_points()
       c.update_set_points(new_sp)
     print("Simulating step:",i+1,"of",steps)
-    s.sim_step(0.05)
+    s.sim_step(0.05, i)
     if plot:
       s.update_plot(ax,plot_sensors=plot_rays)
       fig.canvas.draw()
       fig.canvas.flush_events()
+  s.logger.save_log("log_test_v2.txt")

@@ -22,6 +22,8 @@ class Simulator(CommunicationNode):
       or trajectories = dict of {time_step: list[{drone_id, drone_state}]} must be supplied as kwargs.\n\
       Simulator constructor failed"
 
+    self.log_sim = kwargs.get("log_sim", False)
+
     self.environment = environment
 
     if "drones" in kwargs:
@@ -44,7 +46,8 @@ class Simulator(CommunicationNode):
         packet_loss = kwargs["com_packet_loss"] if "com_packet_loss" in kwargs else None
       )
 
-      self.logger = Logger(self.environment) if "log_sim" in kwargs and kwargs["log_sim"] else None
+      if self.log_sim:
+        self.logger = Logger(self.environment)
   
     elif "trajectories" in kwargs:
       self.state = self.SimulatorState.RECREATE
@@ -64,8 +67,8 @@ class Simulator(CommunicationNode):
     if not msg is None:
       msg()
   
-  def sim_step(self, time_step):
-    
+  def sim_step(self, step_length, time):
+    """
     def set_sensor_data_for_drone(drone_id, sensor_data):
       self.drone_sensor_data[drone_id] = sensor_data
 
@@ -73,7 +76,7 @@ class Simulator(CommunicationNode):
       self.drone_states[drone_id] = drone_state
 
     msg_threads = []
-    """
+
     for d in self.drones:
       sensor_data_thread = self.com_channel.send_msg(d, [self], set_sensor_data_for_drone(d.id, d.read_sensors(self.environment)))
       drone_state_thread = self.com_channel.send_msg(d, [self], set_state_for_drone(d.id, d.state))
@@ -88,7 +91,8 @@ class Simulator(CommunicationNode):
     self.commands = self.controller.get_commands(self.drone_states, self.drone_sensor_data)
     for d in self.drones:
       d.update_command(self.commands[d.id])
-      d.update_state(time_step)
+      state = d.update_state(step_length)
+      self.logger.write_to_log(time, d.id, state)
 
   def get_drone_sensors(self):
     readings, orgins, idx_drones = self.read_range_sensors()

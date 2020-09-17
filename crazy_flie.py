@@ -7,6 +7,7 @@ from drone import Drone
 import numpy as np
 from math import pi
 from typing import List
+from copy import deepcopy
 
 class CrazyFlie(Drone,CommunicationNode):
 
@@ -79,6 +80,7 @@ class CrazyFlie(Drone,CommunicationNode):
 
     self.state[0:3] = self.state[0:3] + time_step * (R @ self.state_dot[0:3])
     self.state[3:6] = unwrap(self.state[3:6] + time_step * (T @ self.state_dot[3:6]))
+    return deepcopy(self.state)
     #self.state = np.concatenate([trans,anggular])
 
 
