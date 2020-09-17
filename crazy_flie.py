@@ -1,4 +1,4 @@
-from range_sensor import RangeSensor,
+from range_sensor import RangeSensor
 from sensor import Sensor
 from environment import Environment
 from communication import CommunicationNode
@@ -63,8 +63,8 @@ class CrazyFlie(Drone,CommunicationNode):
       start_ind = start_ind + r.shape[1]
     self.rays = np.concatenate(rays,axis=1)
     self.orgins = np.concatenate(orgins,axis=1)
-    self.max_ranges = np.concatenate(max_ranges,axis=1)
-    self.min_ranges = np.concatenate(min_ranges,axis=1)
+    self.max_ranges = np.concatenate(max_ranges)
+    self.min_ranges = np.concatenate(min_ranges)
 
   def recv_msg(self, msg):
     print(f"{self} reveiced msg")

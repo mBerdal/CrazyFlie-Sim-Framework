@@ -51,11 +51,6 @@ class Simulator(CommunicationNode):
       if self.log_sim:
         self.logger = Logger(drones=self.drones, environment=self.environment)
   
-    elif "trajectories" in kwargs:
-      self.state = self.SimulatorState.RECREATE
-      self.drones = Simulator.__load_drones(kwargs["trajectories"]["0.0"])
-
-  
   @staticmethod
   def __load_drones(drone_list):
     return [
@@ -89,51 +84,6 @@ class Simulator(CommunicationNode):
       t.join()
     """
 
-    self.get_drone_sensors()
-    self.get_drone_states()
-    self.commands = self.controller.get_commands(self.drone_states, self.drone_sensor_data)
-    for d in self.drones:
-      d.update_command(self.commands[d.id])
-      state = d.update_state(step_length)
-      self.logger.write_to_log(time, d.id, state, None)
-
-  def get_drone_sensors(self):
-    readings, orgins, idx_drones = self.read_range_sensors()
-    self.drone_sensor_data = {}
-    for d in self.drones:
-      self.drone_sensor_data[d.id] = readings[:,idx_drones[d.id]["start"]:idx_drones[d.id]["end"]]
-
-  def get_drone_states(self):
-    self.drone_states = {}
-    for d in self.drones:
-      self.drone_states[d.id] = d.state
-
-  def plot(self,ax,plot_sensors=False):
-    self.figs_drones = []
-
-    self.environment.plot(ax)
-    for d in self.drones:
-      self.figs_drones.append(
-      ax.plot(d.state[0],d.state[1],"go")
-      )
-    if plot_sensors:
-      self.figs_rays = []
-      rays, orgins, idx_drones = self.read_range_sensors()
-      for i in range(rays.shape[0]):
-        ray = rays[i,:]
-        orgin = orgins[i,:]
-        self.figs_rays.append(
-        ax.plot([orgin[0],orgin[0]+ray[0]],[orgin[1],orgin[1]+ray[1]],"r")
-        )
-
-  def update_plot(self,ax,plot_sensors=False):
-    for ind, d in enumerate(self.drones):
-      self.figs_drones[ind][0].set_data(d.state[0],d.state[1])
-    if plot_sensors:
-      rays, orgins, idx_drones = self.read_range_sensors()
-      for i in range(rays.shape[0]):
-        ray = rays[i, :]
-        orgin = orgins[i, :]
-        self.figs_rays[i][0].set_data(
-          [orgin[0], orgin[0] + ray[0]], [orgin[1], orgin[1] + ray[1]]
-        )
+    drone_states, sensor_readings = self.drone_swarm.sim_step(step_length, self.environment)
+    for d_id, d_state in drone_states.items():
+      self.logger.write_to_log(time, d_id, d_state, sensor_readings[d_id])

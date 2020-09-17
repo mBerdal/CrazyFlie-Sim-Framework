@@ -8,10 +8,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 np.random.seed(0)
-num_drones = 1
+num_drones = 2
 plot = False
 plot_rays = True
-steps = 2
+steps = 10
 
 x_lim_l = 0
 x_lim_u = 16
