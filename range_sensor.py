@@ -77,11 +77,27 @@ class RangeSensor(Sensor):
         orgins = np.array([self.sensor_pos_bdy]*self.num_rays,np.float).squeeze().transpose()
         return vectors, orgins
 
-    def plot(self, axis, environment, state_host: np.ndarray) -> None:
-        pass
-
-    def update_plot(self, environment, state_host: np.ndarray) -> None:
-        pass
+    @staticmethod
+    def init_plot(axis, host_state, host_rel_pos, host_rel_attitude, max_range, arc_angle) -> None:
+        w =  Wedge(
+          (host_state[0:3] + rot_matrix_zyx(host_state.item(3), host_state.item(4), host_state.item(5))@host_rel_pos)[0:2].reshape(2, ),
+          max_range,
+          np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) - arc_angle/2),
+          np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) + arc_angle/2),
+          color="blue",
+          alpha=0.3
+        )
+        axis.add_patch(w)
+        return w
+        
+    @staticmethod
+    def update_plot(fig, host_state, host_rel_pos, host_rel_attitude, max_range, measured_range, arc_angle) -> None:
+        fig.set_center((host_state[0:3] + rot_matrix_zyx(host_state.item(3), host_state.item(4), host_state.item(5))@host_rel_pos)[0:2].reshape(2, ))
+        fig.set_radius(measured_range if measured_range < max_range else max_range)
+        fig.set_theta1(np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) - arc_angle/2))
+        fig.set_theta2(np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) + arc_angle/2))
+        fig.set_color("red" if measured_range < max_range else "blue")
+        return fig
 
 
 

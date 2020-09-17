@@ -55,7 +55,9 @@ class Logger():
   def __init__(self, drones = [], environment = None):
     self.environment = environment
     self.trajectories = {}
-    self.drones_info = [drone.get_specs_dict() for drone in drones]
+    self.drones_info = {}
+    for drone in drones:
+      self.drones_info = {**self.drones_info, **drone.get_specs_dict()}
       
   def read_log(self, filename: str = "") -> Tuple[Environment, Dict[float, List[Dict[str, np.ndarray]]]]:
     assert self.environment is None, "Logger instantiated with environment is in write-only mode. read_log failed"
@@ -93,11 +95,11 @@ class Logger():
     assert not self.environment is None, "Logger does not have a set environment and is therefore in read-only mode. write_to_log failed"
     assert self.__is_valid_drone_id, f"agent with id {drone_id} not registered in log"
 
-    id_state_meas_dict = {"id": drone_id, "state": drone_state.tolist(), "measurements": measurements}
+    id_state_meas_dict = {"id": drone_id, }
     try:
-      self.trajectories[timestep].append(id_state_meas_dict)
+      self.trajectories[timestep][drone_id] = {"state": drone_state.tolist(), "measurements": measurements}
     except KeyError:
-      self.trajectories[timestep] = [id_state_meas_dict]
+      self.trajectories[timestep] = {drone_id: {"state": drone_state.tolist(), "measurements": measurements}}
 
   def save_log(self, filename):
     assert not self.environment is None, "Logger does not have a set environment can therefore not be saved. save_log failed"

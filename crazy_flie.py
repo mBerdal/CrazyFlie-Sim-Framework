@@ -71,10 +71,9 @@ class CrazyFlie(Drone,CommunicationNode):
     print(msg)
 
   def get_specs_dict(self):
-    return {**super().get_specs_dict(), **{
-      "id": self.id,
+    return {self.id: {**super().get_specs_dict(), **{
       "sensors": [s.get_specs_dict() for s in self.sensors]
-    }}
+    }}}
 
   def get_sensor_rays(self):
     rot_body_to_ned = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])

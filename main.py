@@ -3,6 +3,8 @@ from crazy_flie import CrazyFlie
 from communication import CommunicationChannel, CommunicationNode
 from simulator import Simulator
 from controller import SwarmController
+from range_sensor import RangeSensor
+from matplotlib import animation
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +13,7 @@ np.random.seed(0)
 num_drones = 2
 plot = False
 plot_rays = True
-steps = 10
+steps = 200
 
 x_lim_l = 0
 x_lim_u = 16
@@ -124,3 +126,38 @@ if __name__ == "__main__":
       fig.canvas.draw()
       fig.canvas.flush_events()
   s.logger.save_log("log_test_v2.txt")
+
+  fig, axis = plt.subplots(1)
+  figs = {
+    d_id: [RangeSensor.init_plot(
+        axis,
+        np.array(s.logger.trajectories[0][d_id]["state"]),
+        np.array(info["sensors"][i]["sensor_pos_bdy"]),
+        np.array(info["sensors"][i]["sensor_attitude_bdy"]),
+        info["sensors"][i]["max_range"],
+        info["sensors"][i]["arc_angle"]
+      ) for i in range(len(s.logger.trajectories[0][d_id]["measurements"]))]
+      for d_id, info in s.logger.drones_info.items()}
+  
+  def animate(i):
+    d_id_states_and_measurements = s.logger.trajectories[i]
+    u_figs = []
+    for d_id, states_and_measurements in d_id_states_and_measurements.items():
+      for i, meas in enumerate(states_and_measurements["measurements"]):
+          u_figs.append(
+            RangeSensor.update_plot(
+              figs[d_id][i],
+              np.array(states_and_measurements["state"]),
+              np.array(s.logger.drones_info[d_id]["sensors"][i]["sensor_pos_bdy"]),
+              np.array(s.logger.drones_info[d_id]["sensors"][i]["sensor_attitude_bdy"]),
+              s.logger.drones_info[d_id]["sensors"][i]["max_range"],
+              meas,
+              s.logger.drones_info[d_id]["sensors"][i]["arc_angle"])
+          )
+    return u_figs
+
+
+
+  anim = animation.FuncAnimation(fig, animate, frames=len(s.logger.trajectories), interval=(1/60)*1000, repeat=False, blit=True)
+  axis.axis("equal")
+  plt.show()
