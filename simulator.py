@@ -47,7 +47,7 @@ class Simulator(CommunicationNode):
       )
 
       if self.log_sim:
-        self.logger = Logger(agents=self.drones, environment=self.environment)
+        self.logger = Logger(drones=self.drones, environment=self.environment)
   
     elif "trajectories" in kwargs:
       self.state = self.SimulatorState.RECREATE
@@ -98,7 +98,6 @@ class Simulator(CommunicationNode):
     readings, orgins, idx_drones = self.read_range_sensors()
     self.drone_sensor_data = {}
     for d in self.drones:
-      print(f"{d.id}: {readings[:,idx_drones[d.id]['start']:idx_drones[d.id]['end']]}")
       self.drone_sensor_data[d.id] = readings[:,idx_drones[d.id]["start"]:idx_drones[d.id]["end"]]
 
   def get_drone_states(self):

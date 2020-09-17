@@ -38,11 +38,11 @@ class Logger():
     Takes as argument a filename, and retrieves an enviroment object specified in the file and
     a dictionary containing timesteps as keys and IDs and states of drones at given timestep as values.
 
-  write_to_log(timestep, cfID, cfState): None
+  write_to_log(timestep, drone_id, drone_state, measurements): None
 
     **only available in write-only mode**
-    Takes as argument a timestep [sec], an ID for a CrazyFlie and the state (n-by-1 matrix) of the CrazyFlie
-    at the timestep specified and stores it.
+    Takes as argument a timestep [sec], an ID for a drone, the state (n-by-1 matrix) of the drone, and the
+    sensor measurements at the timestep specified and stores it.
 
   save_log(filename): None
 
@@ -52,20 +52,18 @@ class Logger():
 
 """
 
-  def __init__(self, agents = [], environment = None):
+  def __init__(self, drones = [], environment = None):
     self.environment = environment
     self.trajectories = {}
-    self.agents_info = [
-      {
-        "id": agent.id,
-        "sensors": [s.get_specs_dict() for s in agent.sensors]
-      } for agent in agents
-    ]
+    self.drones_info = [drone.get_specs_dict() for drone in drones]
       
   def read_log(self, filename: str = "") -> Tuple[Environment, Dict[float, List[Dict[str, np.ndarray]]]]:
     assert self.environment is None, "Logger instantiated with environment is in write-only mode. read_log failed"
     try:
       data = read_json(filename)
+
+      drones = data["drones"]
+
       trajectories = data["trajectories"]
       for timestep in trajectories:
         for entry in trajectories[timestep]:
@@ -80,22 +78,22 @@ class Logger():
       else:
         raise Warning("Invalid environment argument in file")
       
-      return Environment(env_objects), trajectories
+      return drones, Environment(env_objects), trajectories
       
     except FileNotFoundError as fnfe:
       print(fnfe)
       return None, None
   
-  def __is_valid_cfID(self, cfID):
-    for a_info in self.agents_info:
-      if a_info["id"] == cfID: return True
+  def __is_valid_drone_id(self, drone_id):
+    for d_info in self.drones_info:
+      if d_info["id"] == drone_id: return True
     return False
     
-  def write_to_log(self, timestep: float, cfID: str, cfState: np.ndarray, cfMeasurements) -> None:
+  def write_to_log(self, timestep: float, drone_id: str, drone_state: np.ndarray, measurements) -> None:
     assert not self.environment is None, "Logger does not have a set environment and is therefore in read-only mode. write_to_log failed"
-    assert self.__is_valid_cfID, f"agent with id {cfID} not registered in log"
+    assert self.__is_valid_drone_id, f"agent with id {drone_id} not registered in log"
 
-    id_state_meas_dict = {"id": cfID, "state": cfState.tolist(), "measurements": cfMeasurements}
+    id_state_meas_dict = {"id": drone_id, "state": drone_state.tolist(), "measurements": measurements}
     try:
       self.trajectories[timestep].append(id_state_meas_dict)
     except KeyError:
@@ -107,6 +105,7 @@ class Logger():
     assert isinstance(self.environment, str)\
       or isinstance(self.environment, Environment), "environment must be either a string or an Environment object. save_log failed"
     write_json(filename, {
+      "drones": self.drones_info,
       "environment": {"path": self.environment} if isinstance(self.environment, str) else {
         "objects": [
           {
@@ -115,6 +114,5 @@ class Logger():
           } for obj in self.environment.objects
         ]
       },
-      "agents": self.agents_info,
       "trajectories": self.trajectories
     })

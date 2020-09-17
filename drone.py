@@ -16,4 +16,7 @@ class Drone(ABC):
     @abstractmethod
     def update_command(self):
         pass
-
+    
+    @abstractmethod
+    def get_specs_dict(self):
+      return {"class": type(self).__name__}
