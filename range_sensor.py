@@ -39,22 +39,23 @@ class RangeSensor(Sensor):
       than max_range and within field of view it returns None
     """
 
-    def __init__(self, max_range: float, range_res: float, arc_angle: float, num_rays: float,
-                 sensor_pos_bdy: np.ndarray, sensor_attitude_body: np.ndarray) -> None:
+    def __init__(self, sensor_pos_bdy: np.ndarray, sensor_attitude_body: np.ndarray,**kwargs) -> None:
         super().__init__()
-        self.max_range = max_range
-        self.range_res = range_res
-        self.arc_angle = arc_angle
-        self.num_rays = num_rays
+        self.max_range = kwargs.get("max_range",4)
+        self.min_range = kwargs.get("min_range",0.04)
+        self.arc_angle = kwargs.get("arc_angle",np.deg2rad(27))
+        self.num_rays = kwargs.get("num_rays",11)
         self.sensor_pos_bdy = sensor_pos_bdy
         self.sensor_attitude_bdy = sensor_attitude_body
         self.ray_vectors, self.ray_orgins = self.calculate_ray_vectors()
+        self.max_range_vector = np.ones(self.ray_vectors.shape[1])*self.max_range
+        self.min_range_vector = np.ones(self.ray_vectors.shape[1])*self.min_range
 
     def get_reading(self, objects, state_host: np.ndarray, return_all_beams = False) -> np.ndarray:
         pass
 
     def get_ray_vectors(self):
-        return self.ray_vectors, self.ray_orgins
+        return self.ray_vectors, self.ray_orgins, self.max_range_vector, self.min_range_vector
 
     def get_specs_dict(self):
         return {**super().get_specs_dict(), **{
@@ -77,49 +78,13 @@ class RangeSensor(Sensor):
         return vectors, orgins
 
     def plot(self, axis, environment, state_host: np.ndarray) -> None:
-        self.figs = []
-        beams = self.get_reading(environment.get_objects(),state_host,return_all_beams=True)
-        pos_host = state_host[0:3]
-        for i in range(beams.shape[1]):
-            self.figs.append(
-                axis.plot(
-                    [pos_host.item(0), pos_host.item(0) +beams.item(0,i)],
-                    [pos_host.item(1), pos_host.item(1) +beams.item(1,i)],
-                    color="r", alpha=0.5)[0]
-            )
+        pass
 
     def update_plot(self, environment, state_host: np.ndarray) -> None:
-        beams = self.get_reading(environment.get_objects(),state_host,return_all_beams=True)
-        i = 0
-        pos_host = state_host[0:3]
-        for i in range(beams.shape[1]):
-            self.figs[i].set_data(
-                [pos_host.item(0), pos_host.item(0) + beams.item(0, i)],
-                [pos_host.item(1), pos_host.item(1) + beams.item(1, i)]
-            )
-
-class ZeroRangeException(Exception):
-    def __init__(self, msg="Zero range detected"):
-        self.msg = msg
-        super().__init__(msg)
+        pass
 
 
-class FullRangeException(Exception):
-    def __init__(self, msg="Nothing detected within range"):
-        self.msg = msg
-        super().__init__(msg)
 
 
-def test():
-    max_range_sensor = 4
-    range_res_sensor = 0.01
-    arc_angle_sensor = np.deg2rad(27)
-    num_beams = 9
-    attitude_body1 = np.array([0, 0, np.pi]).reshape(3, 1)
-    pos_body1 = np.array([0.01, 1, 0]).reshape(3, 1)
-    sensor1 = RangeSensor(max_range_sensor, range_res_sensor, arc_angle_sensor, num_beams, pos_body1,
-                          attitude_body1)
-    ray, orgin = sensor1.get_ray_vectors()
-    print(orgin.dtype)
 
 

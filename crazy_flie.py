@@ -1,4 +1,4 @@
-from range_sensor import RangeSensor, ZeroRangeException, FullRangeException
+from range_sensor import RangeSensor,
 from sensor import Sensor
 from environment import Environment
 from communication import CommunicationNode
@@ -35,30 +35,36 @@ class CrazyFlie(Drone,CommunicationNode):
 
     attitude_body1 = np.array([0, 0, np.pi]).reshape(3, 1)
     pos_body1 = np.array([0.01, 0, 0]).reshape(3, 1)
-    sensor1 = RangeSensor(max_range_sensor, range_res_sensor, arc_angle_sensor, num_beams_sensor, pos_body1, attitude_body1)
+    sensor1 = RangeSensor(pos_body1, attitude_body1,max_range = max_range_sensor, num_rays=num_beams_sensor)
     attitude_body2 = np.array([0, 0, np.pi / 2]).reshape(3, 1)
     pos_body2 = np.array([0, 0.01, 0]).reshape(3, 1)
-    sensor2 = RangeSensor(max_range_sensor, range_res_sensor, arc_angle_sensor, num_beams_sensor, pos_body2, attitude_body2)
+    sensor2 = RangeSensor(pos_body2, attitude_body2,max_range = max_range_sensor, num_rays=num_beams_sensor)
     attitude_body3 = np.array([0, 0, -np.pi / 2]).reshape(3, 1)
     pos_body3 = np.array([-0.01, 0, 0]).reshape(3, 1)
-    sensor3 = RangeSensor(max_range_sensor, range_res_sensor, arc_angle_sensor, num_beams_sensor, pos_body3, attitude_body3)
+    sensor3 = RangeSensor(pos_body3, attitude_body3,max_range = max_range_sensor, num_rays=num_beams_sensor)
     attitude_body4 = np.array([0, 0, 0]).reshape(3, 1)
     pos_body4 = np.array([0, -0.01, 0]).reshape(3, 1)
-    sensor4 = RangeSensor(max_range_sensor, range_res_sensor, arc_angle_sensor, num_beams_sensor, pos_body4, attitude_body4)
+    sensor4 = RangeSensor(pos_body4, attitude_body4,max_range = max_range_sensor, num_rays=num_beams_sensor)
 
     self.sensors = [sensor1, sensor2, sensor3, sensor4]
     rays = []
     orgins =  []
+    max_ranges = []
+    min_ranges = []
     self.sensor_idx = []
     start_ind = 0
     for s in self.sensors:
-      r,o = s.get_ray_vectors()
+      r,o, ma, mi = s.get_ray_vectors()
       rays.append(r)
       orgins.append(o)
+      max_ranges.append(ma)
+      min_ranges.append(mi)
       self.sensor_idx.append({"start":start_ind,"end": start_ind+r.shape[1]})
       start_ind = start_ind + r.shape[1]
     self.rays = np.concatenate(rays,axis=1)
     self.orgins = np.concatenate(orgins,axis=1)
+    self.max_ranges = np.concatenate(max_ranges,axis=1)
+    self.min_ranges = np.concatenate(min_ranges,axis=1)
 
   def recv_msg(self, msg):
     print(f"{self} reveiced msg")
@@ -74,7 +80,13 @@ class CrazyFlie(Drone,CommunicationNode):
     rot_body_to_ned = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])
     rays = rot_body_to_ned @ self.rays
     orgins = rot_body_to_ned @ self.orgins + self.state[0:3]
-    return rays, orgins
+    return rays, orgins, self.max_ranges, self.min_ranges
+
+  def get_sensor_limits(self):
+    return self.max_ranges, self.min_ranges
+
+  def get_sensor_idx(self):
+    return self.sensor_idx
 
   def update_command(self, command):
     self.command = command
@@ -87,7 +99,7 @@ class CrazyFlie(Drone,CommunicationNode):
     self.state[0:3] = self.state[0:3] + time_step * (R @ self.state_dot[0:3])
     self.state[3:6] = unwrap(self.state[3:6] + time_step * (T @ self.state_dot[3:6]))
     return deepcopy(self.state)
-    #self.state = np.concatenate([trans,anggular])
+
 
 
   def update_state_dot(self, time_step):

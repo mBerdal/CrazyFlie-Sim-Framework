@@ -1,8 +1,8 @@
 from environment import Environment
 from crazy_flie import CrazyFlie
-from range_sensor import RangeSensor
 from communication import CommunicationNode, CommunicationChannel
 from logger import Logger
+from drone_swarm import DroneSwarm
 from utils.raytracing import multi_ray_intersect_triangle
 import matplotlib.pyplot as plt
 
@@ -39,6 +39,8 @@ class Simulator(CommunicationNode):
       self.commands = {d.id: np.zeros((6, 1)) for d in self.drones}
 
       self.controller = kwargs["controller"]
+
+      self.drone_swarm = DroneSwarm(self.drones,self.controller)
 
       self.com_channel = CommunicationChannel(
         lambda sender, recipient: kwargs["com_filter"](sender, recipient) if "com_filter" in kwargs else True,
@@ -86,6 +88,7 @@ class Simulator(CommunicationNode):
     for t in msg_threads:
       t.join()
     """
+
     self.get_drone_sensors()
     self.get_drone_states()
     self.commands = self.controller.get_commands(self.drone_states, self.drone_sensor_data)
@@ -104,18 +107,6 @@ class Simulator(CommunicationNode):
     self.drone_states = {}
     for d in self.drones:
       self.drone_states[d.id] = d.state
-
-  def read_range_sensors(self):
-    rays, orgins, idx_drones = self.get_rays()
-    rays = rays.transpose()
-    orgins = orgins.transpose()
-    t_min = np.ones(rays.shape[0])*np.inf
-    for obj in self.environment.get_objects():
-      t = multi_ray_intersect_triangle(orgins,rays,obj["points"],4)
-      t_min = np.minimum(t_min,t)
-    t_min[t_min==np.inf] = 4
-    reading = t_min.reshape(-1,1)*rays
-    return reading, orgins , idx_drones
 
   def plot(self,ax,plot_sensors=False):
     self.figs_drones = []
@@ -146,18 +137,3 @@ class Simulator(CommunicationNode):
         self.figs_rays[i][0].set_data(
           [orgin[0], orgin[0] + ray[0]], [orgin[1], orgin[1] + ray[1]]
         )
-
-  def get_rays(self):
-    rays = []
-    orgins = []
-    idx_drones = {}
-    idx = 0
-    for d in self.drones:
-      r, o = d.get_sensor_rays()
-      rays.append(r)
-      orgins.append(o)
-      idx_drones[d.id] = {"start": idx, "end": r.shape[1]}
-      idx = idx + r.shape[1]
-    rays = np.concatenate(rays,axis=1)
-    orgins = np.concatenate(orgins,axis=1)
-    return rays, orgins, idx_drones
