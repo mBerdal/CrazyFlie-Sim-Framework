@@ -52,10 +52,16 @@ class Logger():
 
 """
 
-  def __init__(self, environment = None):
+  def __init__(self, agents = [], environment = None):
     self.environment = environment
     self.trajectories = {}
-
+    self.agents_info = [
+      {
+        "id": agent.id,
+        "sensors": [s.get_specs_dict() for s in agent.sensors]
+      } for agent in agents
+    ]
+      
   def read_log(self, filename: str = "") -> Tuple[Environment, Dict[float, List[Dict[str, np.ndarray]]]]:
     assert self.environment is None, "Logger instantiated with environment is in write-only mode. read_log failed"
     try:
@@ -79,14 +85,21 @@ class Logger():
     except FileNotFoundError as fnfe:
       print(fnfe)
       return None, None
+  
+  def __is_valid_cfID(self, cfID):
+    for a_info in self.agents_info:
+      if a_info["id"] == cfID: return True
+    return False
     
-  def write_to_log(self, timestep: float, cfID: str, cfState: np.ndarray) -> None:
+  def write_to_log(self, timestep: float, cfID: str, cfState: np.ndarray, cfMeasurements) -> None:
     assert not self.environment is None, "Logger does not have a set environment and is therefore in read-only mode. write_to_log failed"
-    id_state_dict = {"id": cfID, "state": cfState.tolist()}
+    assert self.__is_valid_cfID, f"agent with id {cfID} not registered in log"
+
+    id_state_meas_dict = {"id": cfID, "state": cfState.tolist(), "measurements": cfMeasurements}
     try:
-      self.trajectories[timestep].append(id_state_dict)
+      self.trajectories[timestep].append(id_state_meas_dict)
     except KeyError:
-      self.trajectories[timestep] = [id_state_dict]
+      self.trajectories[timestep] = [id_state_meas_dict]
 
   def save_log(self, filename):
     assert not self.environment is None, "Logger does not have a set environment can therefore not be saved. save_log failed"
@@ -102,12 +115,6 @@ class Logger():
           } for obj in self.environment.objects
         ]
       },
+      "agents": self.agents_info,
       "trajectories": self.trajectories
     })
-
-def main():
-  env, trajs = Logger().read_log("log_test_v1.txt")
-  print(env)
-  print(trajs)
-
-main()

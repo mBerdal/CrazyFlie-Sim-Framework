@@ -8,3 +8,7 @@ class Sensor(ABC):
     @abstractmethod
     def get_reading(self, environment):
         pass
+    
+    @abstractmethod
+    def get_specs_dict(self):
+        pass

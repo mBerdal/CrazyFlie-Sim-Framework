@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 np.random.seed(0)
-num_drones = 1000
+num_drones = 1
 plot = False
 plot_rays = True
 steps = 2

@@ -56,6 +56,14 @@ class RangeSensor(Sensor):
     def get_ray_vectors(self):
         return self.ray_vectors, self.ray_orgins
 
+    def get_specs_dict(self):
+        return {
+          "max_range": self.max_range,
+          "arc_angle": self.arc_angle,
+          "sensor_pos_bdy": self.sensor_pos_bdy.tolist(),
+          "sensor_attitude_bdy": self.sensor_attitude_bdy.tolist()
+        }
+
     def calculate_ray_vectors(self):
         rot_sensor_to_body = rot_matrix_zyx(self.sensor_attitude_bdy.item(0), self.sensor_attitude_bdy.item(1),
                                             self.sensor_attitude_bdy.item(2))
