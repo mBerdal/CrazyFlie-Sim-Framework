@@ -1,13 +1,15 @@
 from sensor.sensor import Sensor
 from logger.log_entry import LogEntry, EntryType
 from utils.rotation_utils import rot_matrix_zyx
+from plottable import Plottable
 
+from inspect import getmodule
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 from copy import deepcopy
 
-class RangeSensor(Sensor):
+class RangeSensor(Sensor, Plottable):
     """
     Class representing a range sensor
     ...
@@ -54,8 +56,8 @@ class RangeSensor(Sensor):
     def get_info_entry(self):
         return LogEntry(
           EntryType.INFO,
-          module="range_sensor",
-          cls = "RangeSensor",
+          module=getmodule(self).__name__,
+          cls = type(self).__name__,
           max_range = self.max_range,
           arc_angle = self.arc_angle,
           sensor_pos_bdy = self.sensor_pos_bdy,

@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from logger.log_entry import LogEntry, EntryType
 from logger.loggable import Loggable
+from plottable import Plottable
+
 from copy import deepcopy
 from inspect import getmodule
 
-class Drone(Loggable, ABC):
+class Drone(Loggable, Plottable, ABC):
 
     def __init__(self, d_id, state, sensors):
       self.id = d_id

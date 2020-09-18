@@ -1,5 +1,6 @@
 from environment.environment import Environment
 from logger.log_entry import EntryType
+from plottable import Plottable
 from utils.json_utils import read_json, write_json
 
 from typing import Dict, List, Tuple
@@ -87,12 +88,12 @@ class Logger():
 
       drones = []
       for id, drone in drones_dict.items():
-        d_class = getattr(importlib.import_module(f"{drone['info']['module']}"), drone["info"]["cls"])
+        d_class = getattr(importlib.import_module(drone["info"]["module"]), drone["info"]["cls"])
         d_args = dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", drone["info"].items()))
 
         sensors = []
         for s in drone["info"]["sensors"]:
-          s_class = getattr(importlib.import_module(f"sensor.{s['module']}"), s['cls'])
+          s_class = getattr(importlib.import_module(s["module"]), s["cls"])
           s_args = {
             k: np.array(v) if isinstance(v, list) else v
             for k, v in dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", s.items())).items()
@@ -159,3 +160,12 @@ class Logger():
 
   def get_traj_length(self):
     return len(self.log["drones"][self.get_drone_ids()[0]]["trajectory"])
+
+  def get_is_sensor_plottable(self, drone_id, sensor_idx):
+    s_class = getattr(
+      importlib.import_module(
+        self.log["drones"][drone_id]["info"].sensors[sensor_idx].module
+      ),
+      self.log["drones"][drone_id]["info"].sensors[sensor_idx].cls
+    )
+    return issubclass(s_class, Plottable)

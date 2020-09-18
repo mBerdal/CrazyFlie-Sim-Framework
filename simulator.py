@@ -67,6 +67,10 @@ class Simulator(CommunicationNode):
 
   def visualize(self):
     fig, axis = plt.subplots(1)
+    for drone_id in self.logger.get_drone_ids():
+      for i in range(self.logger.get_num_drone_sensors(drone_id)):
+        print(self.logger.get_is_sensor_plottable(drone_id, i))
+
     figs = {
       drone_id: [RangeSensor.init_plot(
           axis,

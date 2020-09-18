@@ -104,19 +104,13 @@ class CrazyFlie(Drone, CommunicationNode):
     return readings
 
 
-  def plot(self, axis, environment, plot_sensors=False):
-    self.fig, = axis.plot([self.state[0]], [self.state[1]], 'go')
-    if plot_sensors:
-      for s in self.sensors:
-        if isinstance(s, RangeSensor):
-          s.plot(axis,environment,self.state)
+  @staticmethod
+  def init_plot(axis, **kwargs):
+    pass
 
-  def update_plot(self, environment,plot_sensors=False):
-    self.fig.set_data(self.state[0], self.state[1])
-    if plot_sensors:
-      for s in self.sensors:
-        if isinstance(s, RangeSensor):
-          s.update_plot(environment,self.state)
+  @staticmethod
+  def update_plot(fig, **kwargs):
+    pass
 
 
 def unwrap(angles):
