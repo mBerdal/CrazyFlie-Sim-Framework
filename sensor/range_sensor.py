@@ -1,5 +1,5 @@
 from sensor.sensor import Sensor
-from logger.log_entry import LogEntry, EntryType
+from logger.log_entry import LogEntry
 from utils.rotation_utils import rot_matrix_zyx
 from plottable import Plottable
 
@@ -55,7 +55,6 @@ class RangeSensor(Sensor, Plottable):
 
     def get_info_entry(self):
         return LogEntry(
-          EntryType.INFO,
           module=getmodule(self).__name__,
           cls = type(self).__name__,
           max_range = self.max_range,
@@ -84,25 +83,25 @@ class RangeSensor(Sensor, Plottable):
         return vectors, orgins
 
     @staticmethod
-    def init_plot(axis, host_state, host_rel_pos, host_rel_attitude, max_range, arc_angle, measured_range):
+    def init_plot(axis, state, sensor_pos_bdy, sensor_attitude_bdy, max_range, arc_angle, measurement):
         w =  Wedge(
-          (host_state[0:3] + rot_matrix_zyx(host_state.item(3), host_state.item(4), host_state.item(5))@host_rel_pos)[0:2].reshape(2, ),
-          measured_range if measured_range < max_range else max_range,
-          np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) - arc_angle/2),
-          np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) + arc_angle/2),
-          color="red" if measured_range < max_range else "blue",
+          (state[0:3] + rot_matrix_zyx(state.item(3), state.item(4), state.item(5))@sensor_pos_bdy)[0:2].reshape(2, ),
+          measurement if measurement < max_range else max_range,
+          np.rad2deg(state.item(5) + sensor_attitude_bdy.item(2) - arc_angle/2),
+          np.rad2deg(state.item(5) + sensor_attitude_bdy.item(2) + arc_angle/2),
+          color="red" if measurement < max_range else "blue",
           alpha=0.3
         )
         axis.add_patch(w)
         return w
         
     @staticmethod
-    def update_plot(fig, host_state, host_rel_pos, host_rel_attitude, max_range, arc_angle, measured_range):
-        fig.set_center((host_state[0:3] + rot_matrix_zyx(host_state.item(3), host_state.item(4), host_state.item(5))@host_rel_pos)[0:2].reshape(2, ))
-        fig.set_radius(measured_range if measured_range < max_range else max_range)
-        fig.set_theta1(np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) - arc_angle/2))
-        fig.set_theta2(np.rad2deg(host_state.item(5) + host_rel_attitude.item(2) + arc_angle/2))
-        fig.set_color("red" if measured_range < max_range else "blue")
+    def update_plot(fig, state, sensor_pos_bdy, sensor_attitude_bdy, max_range, arc_angle, measurement):
+        fig.set_center((state[0:3] + rot_matrix_zyx(state.item(3), state.item(4), state.item(5))@sensor_pos_bdy)[0:2].reshape(2, ))
+        fig.set_radius(measurement if measurement < max_range else max_range)
+        fig.set_theta1(np.rad2deg(state.item(5) + sensor_attitude_bdy.item(2) - arc_angle/2))
+        fig.set_theta2(np.rad2deg(state.item(5) + sensor_attitude_bdy.item(2) + arc_angle/2))
+        fig.set_color("red" if measurement < max_range else "blue")
         return fig
 
 

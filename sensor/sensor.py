@@ -1,5 +1,5 @@
 from logger.loggable import Loggable
-from logger.log_entry import LogEntry, EntryType
+from logger.log_entry import LogEntry
 
 from copy import deepcopy
 from abc import ABC, abstractmethod
@@ -15,12 +15,10 @@ class Sensor(Loggable, ABC):
 
     def generate_time_entry(self, measurement):
       return LogEntry(
-        EntryType.TIME,
         measurement = measurement
       )
 
     def get_time_entry(self):
       return LogEntry(
-        EntryType.TIME,
         measurement = deepcopy(self.measurement)
       )

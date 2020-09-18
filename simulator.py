@@ -5,6 +5,8 @@ from communication import CommunicationNode, CommunicationChannel
 from logger.logger import Logger
 from utils.raytracing import multi_ray_intersect_triangle
 
+from plottable import Plottable
+
 from sensor.range_sensor import RangeSensor
 
 from matplotlib.animation import FuncAnimation
@@ -63,40 +65,30 @@ class Simulator(CommunicationNode):
 
     self.drone_swarm.sim_step(step_length, self.environment)
     for d in self.drone_swarm.drones:
-      self.logger.write_to_log(d.get_time_entry(), time)
+      self.logger.log_time_step(d.get_time_entry(), time)
 
   def visualize(self):
     fig, axis = plt.subplots(1)
+    figs = {}
     for drone_id in self.logger.get_drone_ids():
-      for i in range(self.logger.get_num_drone_sensors(drone_id)):
-        print(self.logger.get_is_sensor_plottable(drone_id, i))
-
-    figs = {
-      drone_id: [RangeSensor.init_plot(
-          axis,
-          self.logger.get_drone_state_at_time(drone_id, 0),
-          self.logger.get_drone_sensor_specs(drone_id, sensor_idx).sensor_pos_bdy,
-          self.logger.get_drone_sensor_specs(drone_id, sensor_idx).sensor_attitude_bdy,
-          self.logger.get_drone_sensor_specs(drone_id, sensor_idx).max_range,
-          self.logger.get_drone_sensor_specs(drone_id, sensor_idx).arc_angle,
-          self.logger.get_drone_sensor_measurements_at_time(drone_id, sensor_idx, 0)
-        ) for sensor_idx in range(self.logger.get_num_drone_sensors(drone_id))
-      ] for drone_id in self.logger.get_drone_ids()
-    }
+      figs[drone_id] = {}
+      for sensor_idx in range(self.logger.get_num_drone_sensors(drone_id)):
+        sensor_cls = self.logger.get_sensor_class(drone_id, sensor_idx)
+        if issubclass(sensor_cls, Plottable):
+          figs[drone_id][sensor_idx] = sensor_cls.init_plot(
+            axis,
+            **self.logger.get_sensor_plotting_kwargs(drone_id, sensor_idx, 0.0)
+          )
 
     def animate(t):
       updated_figs = []
       for drone_id in self.logger.get_drone_ids():
-        for index, fig in enumerate(figs[drone_id]):
+        for sensor_idx, fig in figs[drone_id].items():
+          sensor_cls = self.logger.get_sensor_class(drone_id, sensor_idx)
           updated_figs.append(
-              RangeSensor.update_plot(
-                fig,
-                self.logger.get_drone_state_at_time(drone_id, t),
-                self.logger.get_drone_sensor_specs(drone_id, index).sensor_pos_bdy,
-                self.logger.get_drone_sensor_specs(drone_id, index).sensor_attitude_bdy,
-                self.logger.get_drone_sensor_specs(drone_id, index).max_range,
-                self.logger.get_drone_sensor_specs(drone_id, index).arc_angle,
-                self.logger.get_drone_sensor_measurements_at_time(drone_id, index, t)
+            sensor_cls.update_plot(
+            fig,
+            **self.logger.get_sensor_plotting_kwargs(drone_id, sensor_idx, t)
             )
           )
       return updated_figs

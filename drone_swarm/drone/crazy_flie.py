@@ -105,11 +105,11 @@ class CrazyFlie(Drone, CommunicationNode):
 
 
   @staticmethod
-  def init_plot(axis, **kwargs):
+  def init_plot(axis, state, **kwargs):
     pass
 
   @staticmethod
-  def update_plot(fig, **kwargs):
+  def update_plot(fig, state, **kwargs):
     pass
 
 

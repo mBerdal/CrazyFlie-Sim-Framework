@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from logger.log_entry import LogEntry, EntryType
+from logger.log_entry import LogEntry
 from logger.loggable import Loggable
 from plottable import Plottable
 
@@ -27,7 +27,6 @@ class Drone(Loggable, Plottable, ABC):
     
     def get_info_entry(self):
       return LogEntry(
-        EntryType.INFO,
         module=getmodule(self).__name__,
         cls = type(self).__name__,
         id = self.id,
@@ -38,7 +37,6 @@ class Drone(Loggable, Plottable, ABC):
   
     def get_time_entry(self):
       return LogEntry(
-        EntryType.TIME,
         id = self.id,
         state = deepcopy(self.state),
         measurements = [
@@ -48,7 +46,6 @@ class Drone(Loggable, Plottable, ABC):
     
     def generate_time_entry(self, state, measurements):
       return LogEntry(
-        EntryType.TIME,
         id = self.id,
         state = state,
         measurements = [

@@ -1,6 +1,4 @@
 from environment.environment import Environment
-from logger.log_entry import EntryType
-from plottable import Plottable
 from utils.json_utils import read_json, write_json
 
 from typing import Dict, List, Tuple
@@ -89,7 +87,7 @@ class Logger():
       drones = []
       for id, drone in drones_dict.items():
         d_class = getattr(importlib.import_module(drone["info"]["module"]), drone["info"]["cls"])
-        d_args = dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", drone["info"].items()))
+        d_args = dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls" and elem[0] != "id", drone["info"].items()))
 
         sensors = []
         for s in drone["info"]["sensors"]:
@@ -106,7 +104,7 @@ class Logger():
       for id, drone_traj in traj_dict.items():
         for time, state_meas_dict in drone_traj.items():
           drone = list(filter(lambda d: d.id == id, drones))[0]
-          self.write_to_log(
+          self.log_time_step(
             drone.generate_time_entry(
               np.array(state_meas_dict["state"]),
               [float(m["measurement"]) for m in state_meas_dict["measurements"]]
@@ -118,15 +116,14 @@ class Logger():
       print(fnfe)
       return False
 
+  def log_time_step(self, log_entry, timestep) -> None:
+    try:
+      self.log["drones"][log_entry.id]["trajectory"][timestep] = log_entry
+    except KeyError:
+      self.log["drones"][log_entry.id]["trajectory"] = {timestep: log_entry}
 
-  def write_to_log(self, log_entry, timestep: float) -> None:
-    if log_entry.type == EntryType.INFO:
-      self.log["drones"][log_entry.id]["info"] = log_entry
-    elif log_entry.type == EntryType.TIME:
-      try:
-        self.log["drones"][log_entry.id]["trajectory"][timestep] = log_entry
-      except KeyError:
-        self.log["drones"][log_entry.id]["trajectory"] = {timestep: log_entry}
+  def log_info(self, log_entry) -> None:
+    self.log["drones"][log_entry.id]["info"] = log_entry
 
   def save_log(self, filename):
     assert not filename is None, "filename not supplied. save_log failed"
@@ -149,23 +146,34 @@ class Logger():
   def get_num_drone_sensors(self, drone_id):
     return len(self.log["drones"][drone_id]["info"].sensors)
 
-  def get_drone_state_at_time(self, drone_id, timestep):
+  def __get_drone_state_at_time(self, drone_id, timestep):
     return self.log["drones"][drone_id]["trajectory"][timestep].state
   
-  def get_drone_sensor_measurements_at_time(self, drone_id, sensor_idx, time_step):
+  def __get_drone_sensor_measurements_at_time(self, drone_id, sensor_idx, time_step):
     return [ms.measurement for ms in self.log["drones"][drone_id]["trajectory"][time_step].measurements][sensor_idx]
 
-  def get_drone_sensor_specs(self, drone_id, sensor_idx):
+  def __get_drone_sensor_specs(self, drone_id, sensor_idx):
     return self.log["drones"][drone_id]["info"].sensors[sensor_idx]
 
-  def get_traj_length(self):
-    return len(self.log["drones"][self.get_drone_ids()[0]]["trajectory"])
-
-  def get_is_sensor_plottable(self, drone_id, sensor_idx):
-    s_class = getattr(
+  def get_sensor_class(self, drone_id, sensor_idx):
+    return getattr(
       importlib.import_module(
         self.log["drones"][drone_id]["info"].sensors[sensor_idx].module
       ),
       self.log["drones"][drone_id]["info"].sensors[sensor_idx].cls
     )
-    return issubclass(s_class, Plottable)
+
+  def get_drone_class(self, drone_id):
+    return getattr(
+      importlib.import_module(
+        self.log["drones"][drone_id]["info"].module
+      ),
+      self.log["drones"][drone_id]["info"].cls
+    )
+
+  def get_sensor_plotting_kwargs(self, drone_id, sensor_idx, time):
+    return {
+      **{"state": self.__get_drone_state_at_time(drone_id, time)},
+      **dict(filter(lambda elem: elem[0] != "cls" and elem[0] != "module", self.__get_drone_sensor_specs(drone_id, sensor_idx).__dict__.items())),
+      **{"measurement": self.__get_drone_sensor_measurements_at_time(drone_id, sensor_idx, time)}
+    }
