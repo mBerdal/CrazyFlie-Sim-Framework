@@ -1,8 +1,12 @@
 from environment import Environment
+from log_entry import EntryType
 from utils.json_utils import read_json, write_json
 
 from typing import Dict, List, Tuple
 import numpy as np
+
+from copy import deepcopy
+import importlib
 
 class Logger():
   """
@@ -53,23 +57,33 @@ class Logger():
 """
 
   def __init__(self, drones = [], environment = None):
-    self.environment = environment
-    self.trajectories = {}
-    self.drones_info = {}
-    for drone in drones:
-      self.drones_info = {**self.drones_info, **drone.get_specs_dict()}
+    self.log = {"environment": environment, "drones": {}}
+    for d in drones:
+      d_info_entry = d.get_info_entry()
+      self.log["drones"][d_info_entry.id] = {"info": d_info_entry}
       
-  def read_log(self, filename: str = "") -> Tuple[Environment, Dict[float, List[Dict[str, np.ndarray]]]]:
-    assert self.environment is None, "Logger instantiated with environment is in write-only mode. read_log failed"
+  def read_log(self, filename: str = ""):
     try:
       data = read_json(filename)
 
-      drones = data["drones"]
+      drones_dict = data["drones"]
 
-      trajectories = data["trajectories"]
-      for timestep in trajectories:
-        for entry in trajectories[timestep]:
-          entry["state"] = np.array(entry["state"])
+      drones = []
+      for id, drone in drones_dict.items():
+        d_class = getattr(importlib.import_module(drone["info"]["module"]), drone["info"]["cls"])
+        d_args = dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", drone["info"].items()))
+
+        sensors = []
+        for s in drone["info"]["sensors"]:
+          s_class = getattr(importlib.import_module(s["module"]), s["cls"])
+          s_args = dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", s.items()))
+          s_args = {k: np.array(v) if isinstance(v, list) else v for k, v in s_args.items()}
+          sensors.append(s_class(**s_args))
+          
+        drones.append(d_class(id = id, state = np.array(drone["trajectory"]["0"]["state"]), **d_args))
+      print(drones)
+          
+
 
       env_dict = data["environment"]
       env_objects = None
@@ -80,41 +94,32 @@ class Logger():
       else:
         raise Warning("Invalid environment argument in file")
       
-      return drones, Environment(env_objects), trajectories
+      return drones, Environment(env_objects)
       
     except FileNotFoundError as fnfe:
       print(fnfe)
       return None, None
-  
-  def __is_valid_drone_id(self, drone_id):
-    for d_info in self.drones_info:
-      if d_info["id"] == drone_id: return True
-    return False
     
-  def write_to_log(self, timestep: float, drone_id: str, drone_state: np.ndarray, measurements) -> None:
-    assert not self.environment is None, "Logger does not have a set environment and is therefore in read-only mode. write_to_log failed"
-    assert self.__is_valid_drone_id, f"agent with id {drone_id} not registered in log"
-
-    id_state_meas_dict = {"id": drone_id, }
-    try:
-      self.trajectories[timestep][drone_id] = {"state": drone_state.tolist(), "measurements": measurements}
-    except KeyError:
-      self.trajectories[timestep] = {drone_id: {"state": drone_state.tolist(), "measurements": measurements}}
+  def write_to_log(self, log_entry, timestep: float) -> None:
+    if log_entry.type == EntryType.INFO:
+      self.log["drones"][log_entry.id]["info"] = log_entry
+    elif log_entry.type == EntryType.TIME:
+      try:
+        self.log["drones"][log_entry.id]["trajectory"][timestep] = log_entry
+      except KeyError:
+        self.log["drones"][log_entry.id]["trajectory"] = {timestep: log_entry}
 
   def save_log(self, filename):
-    assert not self.environment is None, "Logger does not have a set environment can therefore not be saved. save_log failed"
     assert not filename is None, "filename not supplied. save_log failed"
-    assert isinstance(self.environment, str)\
-      or isinstance(self.environment, Environment), "environment must be either a string or an Environment object. save_log failed"
-    write_json(filename, {
-      "drones": self.drones_info,
-      "environment": {"path": self.environment} if isinstance(self.environment, str) else {
-        "objects": [
-          {
-            "shape": obj["shape"],
-            "points": obj["points"].tolist()
-          } for obj in self.environment.objects
-        ]
-      },
-      "trajectories": self.trajectories
-    })
+
+    lg = deepcopy(self.log)
+    for _, drone_log in lg["drones"].items():
+      drone_log["info"] = drone_log["info"].to_JSONable()
+      for step, step_log in drone_log["trajectory"].items():
+        drone_log["trajectory"][step] = step_log.to_JSONable()
+
+    if isinstance(self.log["environment"], str):
+      lg["environment"] = {"path": self.log["environment"]}
+    else:
+      lg["environment"] = self.log["environment"].to_JSONable()
+    write_json(filename, lg)

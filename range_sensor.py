@@ -8,7 +8,8 @@ from utils.rotation_utils import rot_matrix_zyx
 from utils.raytracing import intersect_rectangle
 import multiprocessing as mp
 from environment import Environment
-
+from log_entry import LogEntry, EntryType
+from copy import deepcopy
 
 class RangeSensor(Sensor):
     """
@@ -39,17 +40,37 @@ class RangeSensor(Sensor):
       than max_range and within field of view it returns None
     """
 
-    def __init__(self, sensor_pos_bdy: np.ndarray, sensor_attitude_body: np.ndarray,**kwargs) -> None:
+    def __init__(self, sensor_pos_bdy: np.ndarray, sensor_attitude_bdy: np.ndarray,**kwargs) -> None:
         super().__init__()
         self.max_range = kwargs.get("max_range",4)
         self.min_range = kwargs.get("min_range",0.04)
         self.arc_angle = kwargs.get("arc_angle",np.deg2rad(27))
         self.num_rays = kwargs.get("num_rays",11)
         self.sensor_pos_bdy = sensor_pos_bdy
-        self.sensor_attitude_bdy = sensor_attitude_body
-        self.ray_vectors, self.ray_orgins = self.calculate_ray_vectors()
+        self.sensor_attitude_bdy = sensor_attitude_bdy
+        assert (not self.sensor_attitude_bdy is None) and (not self.sensor_pos_bdy is None),\
+          "failed initing range_sensor. sensor_attitude_bdy and sensor_pos_bdy must be specified"
+        self.ray_vectors, self.ray_orgins = self.__calculate_ray_vectors()
         self.max_range_vector = np.ones(self.ray_vectors.shape[1])*self.max_range
         self.min_range_vector = np.ones(self.ray_vectors.shape[1])*self.min_range
+        self.sensed_range = float("inf")
+
+    def get_info_entry(self):
+        return LogEntry(
+          EntryType.INFO,
+          module="range_sensor",
+          cls = "RangeSensor",
+          max_range = self.max_range,
+          arc_angle = self.arc_angle,
+          sensor_pos_bdy = self.sensor_pos_bdy.tolist(),
+          sensor_attitude_bdy = self.sensor_attitude_bdy.tolist()
+        )
+    
+    def get_time_entry(self):
+      return LogEntry(
+        EntryType.TIME,
+        sensed_range = deepcopy(self.sensed_range)
+      )
 
     def get_reading(self, objects, state_host: np.ndarray, return_all_beams = False) -> np.ndarray:
         pass
@@ -65,7 +86,7 @@ class RangeSensor(Sensor):
           "sensor_attitude_bdy": self.sensor_attitude_bdy.tolist()
         }}
 
-    def calculate_ray_vectors(self):
+    def __calculate_ray_vectors(self):
         rot_sensor_to_body = rot_matrix_zyx(self.sensor_attitude_bdy.item(0), self.sensor_attitude_bdy.item(1),
                                             self.sensor_attitude_bdy.item(2))
         vectors = np.zeros((3,self.num_rays))

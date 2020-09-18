@@ -26,28 +26,24 @@ class DroneSwarm():
             t = multi_ray_intersect_triangle(orgins, rays, obj["points"], 4)
             t_min = np.minimum(t_min, t)
         t_min[t_min < self.min_ranges] = self.min_ranges[t_min<self.min_ranges]
-        drone_readings = {}
         for d in self.drones:
             local_readings = t_min[idx_drones[d.id]["start"]:idx_drones[d.id]["end"]]
             sensor_idx = d.get_sensor_idx()
-            sensor_readings = []
-            for idx in sensor_idx:
-                sensor_readings.append(np.min(local_readings[idx["start"]:idx["end"]]))
-            drone_readings[d.id] = sensor_readings
-        return drone_readings
+            for i, idx in enumerate(sensor_idx):
+                d.sensors[i].sensed_range = np.min(local_readings[idx["start"]:idx["end"]])
 
     def update_all_states(self,time_step):
-      return {d.id: d.update_state(time_step) for d in self.drones}
+      for d in self.drones:
+        d.update_state(time_step)
     
     def update_all_commands(self, commands):
       for d in self.drones:
         d.update_command(commands[d.id])
 
     def sim_step(self, time_step, environment):
-      sensor_readings = self.read_range_sensors(environment)
-      self.update_all_commands(self.controller.get_commands(self.states, sensor_readings))
-      drone_states = self.update_all_states(time_step)
-      return drone_states, sensor_readings
+      self.read_range_sensors(environment)
+      self.update_all_commands(self.controller.get_commands(self.states, {d.id: [s.sensed_range for s in d.sensors] for d in self.drones}))
+      self.update_all_states(time_step)
 
 
     def get_range_rays(self):

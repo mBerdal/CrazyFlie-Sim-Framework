@@ -73,6 +73,15 @@ class Environment():
       points = get_2d_points(obj)
       axis.plot(points[0,:], points[1,:],color="red")
 
+  def to_JSONable(self):
+    return {
+          "objects": [
+            {
+              "shape": obj["shape"],
+              "points": obj["points"].tolist()
+            } for obj in self.objects
+          ]
+        }
 def get_2d_points(object):
   if object["shape"] == "rectangle":
     points = object['points']
@@ -82,30 +91,3 @@ def get_2d_points(object):
     return object["points"]
   else:
     return None
-
-
-def main():
-  points1 = np.array([[0,0,10,10],[0,0,0,0],[0,3,0,3]])
-  points2 = np.array([[0,0,0,0],[0,0,10,10],[0,3,0,3]])
-  points3 = np.array([[10,10,10,10],[0,0,10,10],[0,3,0,3]])
-  points4 = np.array([[0,0,10,10],[10,10,10,10],[0,3,0,3]])
-
-  obj1 = {"shape": "rectangle","points":points1}
-  obj2 = {"shape": "rectangle", "points": points2}
-  obj3 = {"shape": "rectangle", "points": points3}
-  obj4 = {"shape": "rectangle", "points": points4}
-
-  objects = [obj1,obj2,obj3,obj4]
-
-  env = Environment()
-
-  for obj in objects:
-    env.add_rectangle(obj)
-
-  fig,axis = plt.subplots()
-
-  env.plot(axis)
-  plt.show()
-
-if __name__ == '__main__':
-    main()

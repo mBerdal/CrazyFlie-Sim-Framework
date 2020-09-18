@@ -10,10 +10,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 np.random.seed(0)
-num_drones = 2
+num_drones = 1
 plot = False
 plot_rays = True
-steps = 200
+steps = 1
 
 x_lim_l = 0
 x_lim_u = 16
@@ -125,8 +125,11 @@ if __name__ == "__main__":
       s.update_plot(ax,plot_sensors=plot_rays)
       fig.canvas.draw()
       fig.canvas.flush_events()
+  
   s.logger.save_log("log_test_v2.txt")
-
+  s.logger.read_log("log_test_v2.txt")
+  exit(0)
+  """
   fig, axis = plt.subplots(1)
   figs = {
     d_id: [RangeSensor.init_plot(
@@ -161,3 +164,4 @@ if __name__ == "__main__":
   anim = animation.FuncAnimation(fig, animate, frames=len(s.logger.trajectories), interval=(1/60)*1000, repeat=False, blit=True)
   axis.axis("equal")
   plt.show()
+  """

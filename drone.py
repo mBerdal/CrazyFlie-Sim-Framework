@@ -1,9 +1,14 @@
 from abc import ABC, abstractmethod
+from log_entry import Loggable, LogEntry, EntryType
+from copy import deepcopy
+from inspect import getmodule
 
-class Drone(ABC):
+class Drone(Loggable, ABC):
 
-    def __init__(self):
-        pass
+    def __init__(self, d_id, state, sensors):
+      self.id = d_id
+      self.state = state
+      self.sensors = sensors
 
     @abstractmethod
     def update_state(self):
@@ -17,6 +22,23 @@ class Drone(ABC):
     def update_command(self):
         pass
     
-    @abstractmethod
-    def get_specs_dict(self):
-      return {"class": type(self).__name__}
+    def get_info_entry(self):
+      return LogEntry(
+        EntryType.INFO,
+        module=getmodule(self).__name__,
+        cls = type(self).__name__,
+        id = self.id,
+        sensors = [
+          s.get_info_entry() for s in self.sensors
+        ]
+      )
+  
+    def get_time_entry(self):
+      return LogEntry(
+        EntryType.TIME,
+        id = self.id,
+        state = deepcopy(self.state),
+        measurements = [
+          s.get_time_entry() for s in self.sensors
+        ]
+      )

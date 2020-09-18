@@ -84,6 +84,6 @@ class Simulator(CommunicationNode):
       t.join()
     """
 
-    drone_states, sensor_readings = self.drone_swarm.sim_step(step_length, self.environment)
-    for d_id, d_state in drone_states.items():
-      self.logger.write_to_log(time, d_id, d_state, sensor_readings[d_id])
+    self.drone_swarm.sim_step(step_length, self.environment)
+    for d in self.drone_swarm.drones:
+      self.logger.write_to_log(d.get_time_entry(), time)
