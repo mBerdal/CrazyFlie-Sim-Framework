@@ -87,7 +87,7 @@ class Logger():
 
       drones = []
       for id, drone in drones_dict.items():
-        d_class = getattr(importlib.import_module(f"drone_swarm.drone.{drone['info']['module']}"), drone["info"]["cls"])
+        d_class = getattr(importlib.import_module(f"{drone['info']['module']}"), drone["info"]["cls"])
         d_args = dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", drone["info"].items()))
 
         sensors = []
@@ -110,7 +110,7 @@ class Logger():
               np.array(state_meas_dict["state"]),
               [float(m["measurement"]) for m in state_meas_dict["measurements"]]
             ),
-            int(time)
+            float(time)
           )
       
     except FileNotFoundError as fnfe:
@@ -151,8 +151,8 @@ class Logger():
   def get_drone_state_at_time(self, drone_id, timestep):
     return self.log["drones"][drone_id]["trajectory"][timestep].state
   
-  def get_drone_sensor_measurements_at_time(self, drone_id, time_step):
-    return [ms.measurement for ms in self.log["drones"][drone_id]["trajectory"][time_step].measurements]
+  def get_drone_sensor_measurements_at_time(self, drone_id, sensor_idx, time_step):
+    return [ms.measurement for ms in self.log["drones"][drone_id]["trajectory"][time_step].measurements][sensor_idx]
 
   def get_drone_sensor_specs(self, drone_id, sensor_idx):
     return self.log["drones"][drone_id]["info"].sensors[sensor_idx]

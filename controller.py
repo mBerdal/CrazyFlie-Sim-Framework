@@ -36,7 +36,7 @@ class SwarmController(Controller):
         assert len(drones) == len(set_points)
         controllers = {}
         for d,s in zip(drones,set_points):
-            controllers[d['id']] = DroneControllerPosPI(s)
+            controllers[d.id] = DroneControllerPosPI(s)
         self.controllers = controllers
 
     def get_commands(self, states, sensor_data):
