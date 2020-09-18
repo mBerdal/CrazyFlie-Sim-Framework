@@ -1,19 +1,20 @@
-from environment import Environment
-from crazy_flie import CrazyFlie
+from environment.environment import Environment
+from drone_swarm.drone.crazy_flie import CrazyFlie
 from communication import CommunicationChannel, CommunicationNode
 from simulator import Simulator
 from controller import SwarmController
-from range_sensor import RangeSensor
+from sensor.range_sensor import RangeSensor
 from matplotlib import animation
+from logger.logger import Logger
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 np.random.seed(0)
-num_drones = 1
+num_drones = 2
 plot = False
 plot_rays = True
-steps = 1
+steps = 300
 
 x_lim_l = 0
 x_lim_u = 16
@@ -105,65 +106,52 @@ for o in objects:
 if __name__ == "__main__":
   c = SwarmController(drones,set_points)
   s = Simulator(env, drones=drones, controller=c, log_sim=True)
-
-
-  if plot:
-    fig, ax = plt.subplots()
-    ax.axis("equal")
-    s.plot(ax,plot_sensors=plot_rays)
-    plt.show(block=False)
-
+  """
   print("Starting simulation!")
   for i in range(steps):
 
     if i % 100 == 0 and i != 0:
       new_sp = generate_set_points()
       c.update_set_points(new_sp)
-    print("Simulating step:",i+1,"of",steps)
     s.sim_step(0.05, i)
-    if plot:
-      s.update_plot(ax,plot_sensors=plot_rays)
-      fig.canvas.draw()
-      fig.canvas.flush_events()
-  
-  s.logger.save_log("log_test_v2.txt")
-  ds, e, traj_dict = s.logger.read_log_file("log_test_v2.txt")
-  print(traj_dict)
-  print(ds)
-  exit(0)
+
+  s.logger.save_log("test2.txt")
   """
+  k = Logger()
+  k.load_from_file("test2.txt")
+
   fig, axis = plt.subplots(1)
   figs = {
-    d_id: [RangeSensor.init_plot(
+    drone_id: [RangeSensor.init_plot(
         axis,
-        np.array(s.logger.trajectories[0][d_id]["state"]),
-        np.array(info["sensors"][i]["sensor_pos_bdy"]),
-        np.array(info["sensors"][i]["sensor_attitude_bdy"]),
-        info["sensors"][i]["max_range"],
-        info["sensors"][i]["arc_angle"]
-      ) for i in range(len(s.logger.trajectories[0][d_id]["measurements"]))]
-      for d_id, info in s.logger.drones_info.items()}
-  
-  def animate(i):
-    d_id_states_and_measurements = s.logger.trajectories[i]
-    u_figs = []
-    for d_id, states_and_measurements in d_id_states_and_measurements.items():
-      for i, meas in enumerate(states_and_measurements["measurements"]):
-          u_figs.append(
+        k.get_drone_state_at_time(drone_id, 0),
+        k.get_drone_sensor_specs(drone_id, sensor_idx).sensor_pos_bdy,
+        k.get_drone_sensor_specs(drone_id, sensor_idx).sensor_attitude_bdy,
+        k.get_drone_sensor_specs(drone_id, sensor_idx).max_range,
+        k.get_drone_sensor_specs(drone_id, sensor_idx).arc_angle,
+        k.get_drone_sensor_measurements_at_time(drone_id, 0)[i]
+      ) for sensor_idx in range(k.get_num_drone_sensors(drone_id))
+    ] for drone_id in k.get_drone_ids()
+  }
+
+  def animate(t):
+    updated_figs = []
+    for drone_id in k.get_drone_ids():
+      for i, fig in enumerate(figs[drone_id]):
+        updated_figs.append(
             RangeSensor.update_plot(
-              figs[d_id][i],
-              np.array(states_and_measurements["state"]),
-              np.array(s.logger.drones_info[d_id]["sensors"][i]["sensor_pos_bdy"]),
-              np.array(s.logger.drones_info[d_id]["sensors"][i]["sensor_attitude_bdy"]),
-              s.logger.drones_info[d_id]["sensors"][i]["max_range"],
-              meas,
-              s.logger.drones_info[d_id]["sensors"][i]["arc_angle"])
+              fig,
+              k.get_drone_state_at_time(drone_id, t),
+              k.get_drone_sensor_specs(drone_id, i).sensor_pos_bdy,
+              k.get_drone_sensor_specs(drone_id, i).sensor_attitude_bdy,
+              k.get_drone_sensor_specs(drone_id, i).max_range,
+              k.get_drone_sensor_specs(drone_id, i).arc_angle,
+              k.get_drone_sensor_measurements_at_time(drone_id, t)[i]
           )
-    return u_figs
+        )
+    return updated_figs
 
-
-
-  anim = animation.FuncAnimation(fig, animate, frames=len(s.logger.trajectories), interval=(1/60)*1000, repeat=False, blit=True)
   axis.axis("equal")
+
+  anim = animation.FuncAnimation(fig, animate, frames=k.get_traj_length(), interval=(1/60)*1000, repeat=False, blit=True)
   plt.show()
-  """

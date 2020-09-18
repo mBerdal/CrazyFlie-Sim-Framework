@@ -1,8 +1,8 @@
-from environment import Environment
-from crazy_flie import CrazyFlie
+from environment.environment import Environment
+from drone_swarm.drone.crazy_flie import CrazyFlie
+from drone_swarm.drone_swarm import DroneSwarm
 from communication import CommunicationNode, CommunicationChannel
-from logger import Logger
-from drone_swarm import DroneSwarm
+from logger.logger import Logger
 from utils.raytracing import multi_ray_intersect_triangle
 import matplotlib.pyplot as plt
 
@@ -15,7 +15,7 @@ class Simulator(CommunicationNode):
     NORMAL = 0
     RECREATE = 1
 
-  def __init__(self, environment: Environment, **kwargs) -> None:
+  def __init__(self, environment, **kwargs) -> None:
     assert not environment is None, "environment must be a valid Environment object. Simulator constructor failed"
     assert "drones" in kwargs or "trajectories" in kwargs,\
       "Either drones = list of {'id': drone_id, 'state': state} and controller = Controller()\n\
@@ -38,14 +38,14 @@ class Simulator(CommunicationNode):
       self.drone_states = {}
       self.commands = {d.id: np.zeros((6, 1)) for d in self.drones}
 
-      self.controller = kwargs["controller"]
+      self.controller = kwargs.get("controller", None)
 
       self.drone_swarm = DroneSwarm(self.drones,self.controller)
 
       self.com_channel = CommunicationChannel(
-        lambda sender, recipient: kwargs["com_filter"](sender, recipient) if "com_filter" in kwargs else True,
-        delay = kwargs["com_delay"] if "com_delay" in kwargs else None,
-        packet_loss = kwargs["com_packet_loss"] if "com_packet_loss" in kwargs else None
+        lambda sender, recipient: kwargs.get("com_filter", lambda s, r: True)(sender, recipient),
+        delay = kwargs.get("com_delay", None),
+        packet_loss = kwargs.get("com_packet_loss", None)
       )
 
       if self.log_sim:
