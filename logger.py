@@ -62,11 +62,18 @@ class Logger():
       d_info_entry = d.get_info_entry()
       self.log["drones"][d_info_entry.id] = {"info": d_info_entry}
       
-  def read_log(self, filename: str = ""):
+  def read_log_file(self, filename: str = ""):
     try:
       data = read_json(filename)
 
-      drones_dict = data["drones"]
+      drones_dict = data.get("drones", None)
+      assert not drones_dict is None, f"Drones not specified in file {filename}. Failed to read."
+
+      env_dict = data.get("environment", None)
+      assert not env_dict is None, f"Environment not specified in file {filename}. Failed to read."
+
+      assert "trajectory" in dict(next(iter(drones_dict.values()))).keys(), f"Trajectories not specified in file {filename}. Failed to read."
+      traj_dict = {id: drone_dict["trajectory"] for id, drone_dict in drones_dict.items()}
 
       drones = []
       for id, drone in drones_dict.items():
@@ -76,25 +83,23 @@ class Logger():
         sensors = []
         for s in drone["info"]["sensors"]:
           s_class = getattr(importlib.import_module(s["module"]), s["cls"])
-          s_args = dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", s.items()))
-          s_args = {k: np.array(v) if isinstance(v, list) else v for k, v in s_args.items()}
+          s_args = {
+            k: np.array(v) if isinstance(v, list) else v
+            for k, v in dict(filter(lambda elem: elem[0] != "module" and elem[0] != "cls", s.items())).items()
+          }
           sensors.append(s_class(**s_args))
-          
-        drones.append(d_class(id = id, state = np.array(drone["trajectory"]["0"]["state"]), **d_args))
-      print(drones)
-          
 
+        drones.append(d_class(id = id, state = np.array(next(iter(drone["trajectory"].values()))["state"]), **d_args))
 
-      env_dict = data["environment"]
-      env_objects = None
+      env = None
       if "path" in env_dict.keys():
-        env_objects = read_json(env_dict["path"])
+        env = Environment(read_json(env_dict["path"]))
       elif "objects" in env_dict.keys():
-        env_objects = [{"shape": obj["shape"], "points": np.array(obj["points"])} for obj in env_dict["objects"]]
+        env = Environment([{"shape": obj["shape"], "points": np.array(obj["points"])} for obj in env_dict["objects"]])
       else:
         raise Warning("Invalid environment argument in file")
       
-      return drones, Environment(env_objects)
+      return drones, env, traj_dict
       
     except FileNotFoundError as fnfe:
       print(fnfe)

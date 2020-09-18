@@ -127,7 +127,9 @@ if __name__ == "__main__":
       fig.canvas.flush_events()
   
   s.logger.save_log("log_test_v2.txt")
-  s.logger.read_log("log_test_v2.txt")
+  ds, e, traj_dict = s.logger.read_log_file("log_test_v2.txt")
+  print(traj_dict)
+  print(ds)
   exit(0)
   """
   fig, axis = plt.subplots(1)
