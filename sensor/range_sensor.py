@@ -13,32 +13,10 @@ class RangeSensor(Sensor, Plottable):
     """
     Class representing a range sensor
     ...
-
-    Attributes
-    ----------
-    max_range: float
-      Maximum distance in meters sensor can measure
-    range_res: float
-      Smallest amount by which sensor can differentiate distances
-    arc_angle: float
-      Sensor field of view in radians
-    angle_res:
-      Smalles amount by which sensor can differentiate angles in radians
-    self_pos_host_BODY: np.ndarray
-      Position of sensor relative to host represented in the coordinate system of the host
-    ang_host_BODY_self_BODY: float
-      Angle of x-axis of sensors coordinate system relative to x-axis of host's coordinate system
-
-    Methods
-    ----------
-    get_reading(environment, state_host): np.ndarray/None
-      Takes as argument an environment object, state of host represented in the NED coordinate system. If there are obstacles
-      in the environment that are closer to the sensor than max_range and within field of view it returns
-      a vector from the origin of host's coordinate to the nearest obstacle. If there are no obstacles closer
-      than max_range and within field of view it returns None
+    
     """
 
-    def __init__(self, sensor_pos_bdy: np.ndarray, sensor_attitude_bdy: np.ndarray,**kwargs) -> None:
+    def __init__(self, sensor_pos_bdy: np.ndarray, sensor_attitude_bdy: np.ndarray, noise_generator = lambda: 0, **kwargs) -> None:
         super().__init__()
         self.max_range = kwargs.get("max_range",4)
         self.min_range = kwargs.get("min_range",0.04)
@@ -90,7 +68,7 @@ class RangeSensor(Sensor, Plottable):
           np.rad2deg(state.item(5) + sensor_attitude_bdy.item(2) - arc_angle/2),
           np.rad2deg(state.item(5) + sensor_attitude_bdy.item(2) + arc_angle/2),
           color="red" if measurement < max_range else "blue",
-          alpha=0.3
+          alpha=0.2
         )
         axis.add_patch(w)
         return w

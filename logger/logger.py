@@ -172,6 +172,9 @@ class Logger():
       **dict(filter(lambda elem: elem[0] != "cls" and elem[0] != "module", self.__get_drone_sensor_specs(drone_id, sensor_idx).__dict__.items())),
       **{"measurement": self.__get_drone_sensor_measurements_at_time(drone_id, sensor_idx, time)}
     }
+
+  def get_drone_plotting_kwargs(self, drone_id, time):
+    return {"state": self.__get_drone_state_at_time(drone_id, time)}
     
   def __log_info(self, drones):
     for d in drones:

@@ -5,7 +5,7 @@ from copy import deepcopy
 from abc import ABC, abstractmethod
 
 class Sensor(Loggable, ABC):
-    def __init__(self):
+    def __init__(self, noise_generator = lambda: 0):
       self.measurement = None
       super().__init__()
 

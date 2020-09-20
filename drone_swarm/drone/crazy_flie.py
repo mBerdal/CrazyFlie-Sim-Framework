@@ -3,6 +3,8 @@ from drone_swarm.drone.drone import Drone
 from logger.log_entry import LogEntry
 from utils.rotation_utils import rot_matrix_zyx, angular_transformation_matrix_zyx
 
+from matplotlib.patches import Circle
+
 import numpy as np
 from math import pi
 from copy import deepcopy
@@ -14,20 +16,17 @@ class CrazyFlie(Drone):
     range_res_sensor = kwargs.get('range_res_sensor',0.001)
     arc_angle_sensor = kwargs.get("arc_angle_sensor",np.deg2rad(27))
     num_beams_sensor = kwargs.get("num_beams_sensor",11)
-    attitude_body1 = np.array([0, 0, np.pi]).reshape(3, 1)
-    pos_body1 = np.array([0.01, 0, 0]).reshape(3, 1)
-    sensor1 = RangeSensor(pos_body1, attitude_body1,max_range = max_range_sensor, num_rays=num_beams_sensor)
-    attitude_body2 = np.array([0, 0, np.pi / 2]).reshape(3, 1)
-    pos_body2 = np.array([0, 0.01, 0]).reshape(3, 1)
-    sensor2 = RangeSensor(pos_body2, attitude_body2,max_range = max_range_sensor, num_rays=num_beams_sensor)
-    attitude_body3 = np.array([0, 0, -np.pi / 2]).reshape(3, 1)
-    pos_body3 = np.array([-0.01, 0, 0]).reshape(3, 1)
-    sensor3 = RangeSensor(pos_body3, attitude_body3,max_range = max_range_sensor, num_rays=num_beams_sensor)
-    attitude_body4 = np.array([0, 0, 0]).reshape(3, 1)
-    pos_body4 = np.array([0, -0.01, 0]).reshape(3, 1)
-    sensor4 = RangeSensor(pos_body4, attitude_body4,max_range = max_range_sensor, num_rays=num_beams_sensor)
 
-    super().__init__(id, state, [sensor1, sensor2, sensor3, sensor4])
+    sensors = [
+      RangeSensor(
+        np.array([((-1)**i)*0.01 if i == 0 or i == 2 else 0, ((-1)**i)*0.01 if i == 1 or i == 3 else 0, 0]).reshape(3, 1),
+        np.array([0, 0, (np.pi/2)*i]).reshape(3, 1),
+        max_range = max_range_sensor,
+        num_rays=num_beams_sensor
+      ) for i in range(4)
+    ]
+
+    super().__init__(id, state, sensors)
     self.prev_state = state
 
     self.state_dot = np.zeros([6,1])
@@ -102,12 +101,13 @@ class CrazyFlie(Drone):
 
   @staticmethod
   def init_plot(axis, state, **kwargs):
-    pass
+    c = Circle(state[0:2], radius=0.01, color="green")
+    axis.add_patch(c)
+    return c
 
   @staticmethod
   def update_plot(fig, state, **kwargs):
-    pass
-
+    fig.set_center(state[0:2])
 
 def unwrap(angles):
   angles[0] = angles[0] % 2*pi if angles[0] > 2*pi or angles[0] < 0 else angles[0]
