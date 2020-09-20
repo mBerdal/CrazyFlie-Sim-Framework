@@ -1,4 +1,6 @@
 from environment.environment import Environment
+from environment.obstacle import Obstacle
+
 from utils.json_utils import read_json, write_json
 
 from typing import Dict, List, Tuple
@@ -56,16 +58,8 @@ class Logger():
 """
 
   def __init__(self, drones = [], environment = None):
-    self.log = {"environment": None, "drones": {}}
-    self.__log_environment(environment)
+    self.log = {"environment": environment, "drones": {}}
     self.__log_info(drones)
-
-  def __log_environment(self, environment):
-    self.log["environment"] = environment
-
-  def __log_info(self, drones):
-    for d in drones:
-      self.log["drones"][d.id] = {"info": d.get_info_entry()}
       
   def load_from_file(self, filename: str = ""):
     try:
@@ -82,7 +76,7 @@ class Logger():
 
       if "path" in env_dict.keys():
         env_dict = read_json(env_dict["path"])
-      self.__log_environment(Environment([{"shape": obj["shape"], "points": np.array(obj["points"])} for obj in env_dict["objects"]]))
+      self.log["environment"] =  Environment([Obstacle(obj["shape"], np.array(obj["points"])) for obj in env_dict["obstacles"]])
 
       drones = []
       for id, drone in drones_dict.items():
@@ -140,20 +134,21 @@ class Logger():
       lg["environment"] = self.log["environment"].to_JSONable()
     write_json(filename, lg)
 
+  def get_environment(self):
+    return self.log["environment"]
+
   def get_drone_ids(self):
     return list(self.log["drones"].keys())
 
   def get_num_drone_sensors(self, drone_id):
     return len(self.log["drones"][drone_id]["info"].sensors)
 
-  def __get_drone_state_at_time(self, drone_id, timestep):
-    return self.log["drones"][drone_id]["trajectory"][timestep].state
-  
-  def __get_drone_sensor_measurements_at_time(self, drone_id, sensor_idx, time_step):
-    return [ms.measurement for ms in self.log["drones"][drone_id]["trajectory"][time_step].measurements][sensor_idx]
+  def get_log_end_time(self):
+    return float(max(self.log["drones"][self.get_drone_ids()[0]]["trajectory"].keys()))
 
-  def __get_drone_sensor_specs(self, drone_id, sensor_idx):
-    return self.log["drones"][drone_id]["info"].sensors[sensor_idx]
+  def get_log_time_step(self):
+    it = iter(self.log["drones"][self.get_drone_ids()[0]]["trajectory"].keys())
+    return -next(it) + next(it)
 
   def get_sensor_class(self, drone_id, sensor_idx):
     return getattr(
@@ -177,3 +172,16 @@ class Logger():
       **dict(filter(lambda elem: elem[0] != "cls" and elem[0] != "module", self.__get_drone_sensor_specs(drone_id, sensor_idx).__dict__.items())),
       **{"measurement": self.__get_drone_sensor_measurements_at_time(drone_id, sensor_idx, time)}
     }
+    
+  def __log_info(self, drones):
+    for d in drones:
+      self.log["drones"][d.id] = {"info": d.get_info_entry()}
+
+  def __get_drone_state_at_time(self, drone_id, timestep):
+    return self.log["drones"][drone_id]["trajectory"][timestep].state
+  
+  def __get_drone_sensor_measurements_at_time(self, drone_id, sensor_idx, time_step):
+    return [ms.measurement for ms in self.log["drones"][drone_id]["trajectory"][time_step].measurements][sensor_idx]
+
+  def __get_drone_sensor_specs(self, drone_id, sensor_idx):
+    return self.log["drones"][drone_id]["info"].sensors[sensor_idx]

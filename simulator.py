@@ -22,15 +22,21 @@ class Simulator(CommunicationNode):
     self.logger = kwargs.get("logger", None)
     self.controller = kwargs.get("controller", None)
 
-    self.drone_swarm = DroneSwarm(self.drones, self.controller)
+    assert (not self.logger is None) or not (self.drones is None or self.controller is None or self.environment is None)
 
-    self.com_channel = CommunicationChannel(
-      lambda sender, recipient: kwargs.get("com_filter", lambda s, r: True)(sender, recipient),
-      delay = kwargs.get("com_delay", None),
-      packet_loss = kwargs.get("com_packet_loss", None)
-    )
+    if not self.logger is None:
+      self.environment = self.logger.get_environment()
+      self.step_length = self.logger.get_log_time_step()
+      self.time_line = np.arange(0, self.logger.get_log_end_time(), self.step_length)
+    else:
+      self.drone_swarm = DroneSwarm(self.drones, self.controller)
 
-    if self.logger is None and self.log_sim:
+      self.com_channel = CommunicationChannel(
+        lambda sender, recipient: kwargs.get("com_filter", lambda s, r: True)(sender, recipient),
+        delay = kwargs.get("com_delay", None),
+        packet_loss = kwargs.get("com_packet_loss", None)
+      )
+
       self.logger = Logger(drones=self.drones, environment=self.environment)
   
   def recv_msg(self, msg):
@@ -79,6 +85,8 @@ class Simulator(CommunicationNode):
             axis,
             **self.logger.get_sensor_plotting_kwargs(drone_id, sensor_idx, 0.0)
           )
+
+    self.environment.plot(axis)
 
     def animate(t):
       updated_figs = []

@@ -1,4 +1,5 @@
 from environment.environment import Environment
+from environment.obstacle import Obstacle
 from drone_swarm.drone.crazy_flie import CrazyFlie
 from communication import CommunicationChannel, CommunicationNode
 from simulator import Simulator
@@ -51,19 +52,15 @@ def generate_set_points():
     new_set_points.append({"id": i,"set_point":sp})
   return new_set_points
 
-points1 = np.array([[0,0,16,16],[0,0,0,0],[0,3,0,3]])
-points2 = np.array([[0,0,0,0],[0,0,16,16],[0,3,0,3]])
-points3 = np.array([[16,16,16,16],[0,0,16,16],[0,3,0,3]])
-points4 = np.array([[0,0,16,16],[16,16,16,16],[0,3,0,3]])
-points5 = np.array([[0,0,10,10],[10,10,10,10],[0,3,0,3]])
+points_array = [
+  np.array([[0,0,16,16],[0,0,0,0],[0,3,0,3]]),
+  np.array([[0,0,0,0],[0,0,16,16],[0,3,0,3]]),
+  np.array([[16,16,16,16],[0,0,16,16],[0,3,0,3]]),
+  np.array([[0,0,16,16],[16,16,16,16],[0,3,0,3]]),
+  np.array([[0,0,10,10],[10,10,10,10],[0,3,0,3]])
+]
 
-obj1 = {"shape": "rectangle","points":points1}
-obj2 = {"shape": "rectangle", "points": points2}
-obj3 = {"shape": "rectangle", "points": points3}
-obj4 = {"shape": "rectangle", "points": points4}
-obj5 = {"shape": "rectangle", "points": points5}
-
-objects = [obj1,obj2,obj3,obj4]
+objects = [Obstacle("rectangle", points) for points in points_array]
 
 num_objects = 4
 new_objects = num_objects-len(objects)
@@ -77,24 +74,25 @@ for _ in range(new_objects):
   y2 = np.random.randint(0,16)
 
   points = np.array([[x1,x1,x2,x2],[y1,y1,y2,y2],[z1,z2,z1,z2]])
-  obj_tmp = {"shape": "rectangle", "points": points}
-  objects.append(obj_tmp)
+  objects.append(Obstacle("rectangle", points))
 
 env = Environment()
 
 for o in objects:
-  env.add_object(o)
+  env.add_obstacle(o)
 
 
 if __name__ == "__main__":
+  """
   c = SwarmController(drones,set_points)
   s = Simulator(environment=env, drones=drones, controller=c, log_sim=True)
-  s.simulate(0.05, 0.05*300)
+  s.simulate(0.05, 40)
 
   s.logger.save_log("test2.txt")
+  """
   k = Logger()
   k.load_from_file("test2.txt")
-
+  s = Simulator(logger = k)
   s.visualize()
 
   

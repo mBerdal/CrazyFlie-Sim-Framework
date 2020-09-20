@@ -4,6 +4,8 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from environment.obstacle import Obstacle
+
 class Environment():
   """
     Class representing the physical environment in which the CrazyFlies operate.
@@ -51,43 +53,31 @@ class Environment():
 
   __SPATIAL_DIMS__ = 2
 
-  def __init__(self, objects = []) -> None:
-    self.objects = []
-    for o in objects:
-      self.add_object(o)
+  def __init__(self, obstacles = []) -> None:
+    self.obstacles = []
+    for o in obstacles:
+      self.add_obstacle(o)
 
-  def add_object(self, obj):
-    if obj["shape"] == "rectangle":
-      self.add_rectangle(obj)
-
-  def add_rectangle(self, obj):
-    assert obj["shape"] == "rectangle"
-    self.objects.append({"shape": "triangle","points":obj["points"][:,0:3]})
-    self.objects.append({"shape": "triangle","points": obj["points"][:, 1:4]})
-
-  def get_objects(self):
-    return self.objects.copy()
+  def add_obstacle(self, obstacle):
+    if obstacle.shape == "rectangle":
+      self.add_obstacle(Obstacle("triangle", obstacle.points[:, 0:3]))
+      self.add_obstacle(Obstacle("triangle", obstacle.points[:, 1:4]))
+    elif obstacle.shape == "triangle":
+      self.obstacles.append(obstacle)
+  
+  def get_obstacles(self):
+    return self.obstacles
 
   def plot(self, axis: plt.Axes) -> None:
-    for obj in self.objects:
-      points = get_2d_points(obj)
-      axis.plot(points[0,:], points[1,:],color="red")
+    for obstacle in self.obstacles:
+      obstacle.plot(axis)
 
   def to_JSONable(self):
     return {
-          "objects": [
+          "obstacles": [
             {
-              "shape": obj["shape"],
-              "points": obj["points"].tolist()
-            } for obj in self.objects
+              "shape": obstacle.shape,
+              "points": obstacle.points.tolist()
+            } for obstacle in self.obstacles
           ]
         }
-def get_2d_points(object):
-  if object["shape"] == "rectangle":
-    points = object['points']
-    points_unique = np.unique(points[0:2,:],axis=1)
-    return points_unique
-  elif object["shape"] == "triangle":
-    return object["points"]
-  else:
-    return None

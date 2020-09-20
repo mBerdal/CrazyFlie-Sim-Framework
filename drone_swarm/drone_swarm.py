@@ -21,8 +21,8 @@ class DroneSwarm():
         rays = rays.transpose()
         orgins = orgins.transpose()
         t_min = np.ones(rays.shape[0]) * np.inf
-        for obj in environment.get_objects():
-            t = multi_ray_intersect_triangle(orgins, rays, obj["points"], 4)
+        for obs in environment.get_obstacles():
+            t = multi_ray_intersect_triangle(orgins, rays, obs.points, 4)
             t_min = np.minimum(t_min, t)
         t_min[t_min < self.min_ranges] = self.min_ranges[t_min<self.min_ranges]
         for d in self.drones:
