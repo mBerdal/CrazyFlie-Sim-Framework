@@ -1,11 +1,13 @@
 from utils.raytracing import multi_ray_intersect_triangle
+from communication import CommunicationNode
 
 import numpy as np
 
-class DroneSwarm():
-    def __init__(self, drones, controller):
+class DroneSwarm(CommunicationNode):
+    def __init__(self, drones, controller, com_channel):
         self.drones = drones
         self.controller = controller
+        self.com_channel = com_channel
         self.states = {drone.id: drone.state for drone in self.drones}
         min_ranges = []
         max_ranges = []
@@ -31,17 +33,18 @@ class DroneSwarm():
             for i, idx in enumerate(sensor_idx):
                 d.sensors[i].measurement = np.min(local_readings[idx["start"]:idx["end"]])
 
-    def update_all_states(self,time_step):
+    def update_all_states(self, time_step):
       for d in self.drones:
         d.update_state(time_step)
     
-    def update_all_commands(self, commands):
+    def distribute_commands(self, commands):
       for d in self.drones:
-        d.update_command(commands[d.id])
+        self.com_channel.send_message(self, [d], "command", commands[d.id])
 
     def sim_step(self, time_step, environment):
       self.read_range_sensors(environment)
-      self.update_all_commands(self.controller.get_commands(self.states, {d.id: [s.measurement for s in d.sensors] for d in self.drones}))
+      commands = self.controller.get_commands(self.states, {d.id: [s.measurement for s in d.sensors] for d in self.drones})
+      self.distribute_commands(commands)
       self.update_all_states(time_step)
 
 

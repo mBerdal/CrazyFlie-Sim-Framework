@@ -83,15 +83,12 @@ for o in objects:
 
 
 if __name__ == "__main__":
-  """
   c = SwarmController(drones,set_points)
-  s = Simulator(environment=env, drones=drones, controller=c, log_sim=True)
-  s.simulate(0.05, 40)
+  s = Simulator(environment=env, drones=drones, controller=c, com_delay=3, to_file="test3.txt")
+  s.simulate(0.05, 20)
 
-  s.logger.save_log("test2.txt")
-  """
   k = Logger()
-  k.load_from_file("test2.txt")
+  k.load_from_file("test3.txt")
   s = Simulator(logger = k)
   s.visualize()
 

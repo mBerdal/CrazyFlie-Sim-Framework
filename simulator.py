@@ -1,7 +1,7 @@
 from environment.environment import Environment
 from drone_swarm.drone.crazy_flie import CrazyFlie
 from drone_swarm.drone_swarm import DroneSwarm
-from communication import CommunicationNode, CommunicationChannel
+from communication import CommunicationChannel
 from logger.logger import Logger
 from utils.raytracing import multi_ray_intersect_triangle
 
@@ -13,10 +13,10 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 import numpy as np
 
-class Simulator(CommunicationNode):
+class Simulator():
 
   def __init__(self, **kwargs) -> None:
-    self.log_sim = kwargs.get("log_sim", True)
+    self.to_file = kwargs.get("to_file", None)
     self.environment = kwargs.get("environment", None)
     self.drones = kwargs.get("drones", None)
     self.logger = kwargs.get("logger", None)
@@ -29,46 +29,25 @@ class Simulator(CommunicationNode):
       self.step_length = self.logger.get_log_time_step()
       self.time_line = np.arange(0, self.logger.get_log_end_time(), self.step_length)
     else:
-      self.drone_swarm = DroneSwarm(self.drones, self.controller)
-
-      self.com_channel = CommunicationChannel(
+      com_channel = CommunicationChannel(
         lambda sender, recipient: kwargs.get("com_filter", lambda s, r: True)(sender, recipient),
-        delay = kwargs.get("com_delay", None),
+        delay = kwargs.get("com_delay", 0),
         packet_loss = kwargs.get("com_packet_loss", None)
       )
-
+      self.drone_swarm = DroneSwarm(self.drones, self.controller, com_channel)
       self.logger = Logger(drones=self.drones, environment=self.environment)
-  
-  def recv_msg(self, msg):
-    if not msg is None:
-      msg()
+
 
   def simulate(self, step_length_seconds, end_time_seconds):
     self.time_line = np.arange(0, end_time_seconds, step_length_seconds)
     self.step_length = step_length_seconds
     for time in self.time_line:
       self.__sim_step(step_length_seconds, time)
+
+    if not self.to_file is None:
+      self.logger.save_log(self.to_file)
   
   def __sim_step(self, step_length, time):
-    """
-    def set_sensor_data_for_drone(drone_id, sensor_data):
-      self.drone_sensor_data[drone_id] = sensor_data
-
-    def set_state_for_drone(drone_id, drone_state):
-      self.drone_states[drone_id] = drone_state
-
-    msg_threads = []
-
-    for d in self.drones:
-      sensor_data_thread = self.com_channel.send_msg(d, [self], set_sensor_data_for_drone(d.id, d.read_sensors(self.environment)))
-      drone_state_thread = self.com_channel.send_msg(d, [self], set_state_for_drone(d.id, d.state))
-      msg_threads.append(sensor_data_thread[0])
-      msg_threads.append(drone_state_thread[0])
-    
-    for t in msg_threads:
-      t.join()
-    """
-
     self.drone_swarm.sim_step(step_length, self.environment)
     for d in self.drone_swarm.drones:
       self.logger.log_time_step(d.get_time_entry(), time)

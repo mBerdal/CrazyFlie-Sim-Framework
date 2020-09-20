@@ -1,5 +1,4 @@
 from sensor.range_sensor import RangeSensor
-from communication import CommunicationNode
 from drone_swarm.drone.drone import Drone
 from logger.log_entry import LogEntry
 from utils.rotation_utils import rot_matrix_zyx, angular_transformation_matrix_zyx
@@ -8,7 +7,7 @@ import numpy as np
 from math import pi
 from copy import deepcopy
 
-class CrazyFlie(Drone, CommunicationNode):
+class CrazyFlie(Drone):
 
   def __init__(self, id,  state: np.ndarray, **kwargs) -> None:
     max_range_sensor = kwargs.get('max_range_sensor', 4)
@@ -34,7 +33,7 @@ class CrazyFlie(Drone, CommunicationNode):
     self.state_dot = np.zeros([6,1])
     self.prev_state_dot = np.zeros([6,1])
 
-    self.command = None
+    self.command = np.zeros([6, 1])
 
     acc_limits_lower_std = -np.array([1, 1, 1, np.deg2rad(10), np.deg2rad(10), np.deg2rad(10)]).reshape(6, 1)
     acc_limits_upper_std = np.array([1, 1, 1, np.deg2rad(10), np.deg2rad(10), np.deg2rad(10)]).reshape(6, 1)
@@ -63,10 +62,6 @@ class CrazyFlie(Drone, CommunicationNode):
     self.max_ranges = np.concatenate(max_ranges)
     self.min_ranges = np.concatenate(min_ranges)
 
-  def recv_msg(self, msg):
-    print(f"{self} reveiced msg")
-    print(msg)
-
   def get_sensor_rays(self):
     rot_body_to_ned = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])
     rays = rot_body_to_ned @ self.rays
@@ -79,20 +74,21 @@ class CrazyFlie(Drone, CommunicationNode):
   def get_sensor_idx(self):
     return self.sensor_idx
 
-  def update_command(self, command):
-    self.command = command
+  def update_state(self, step_length):
+    for msg in self.get_msgs(step_length):
+      if msg.data_type == "command":
+        self.command = msg.data
 
-  def update_state(self, time_step):
-    self.update_state_dot(time_step)
+    self.update_state_dot(step_length)
     R = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])
     T = angular_transformation_matrix_zyx(self.state[3],self.state[4])
 
-    self.state[0:3] = self.state[0:3] + time_step * (R @ self.state_dot[0:3])
-    self.state[3:6] = unwrap(self.state[3:6] + time_step * (T @ self.state_dot[3:6]))
+    self.state[0:3] = self.state[0:3] + step_length * (R @ self.state_dot[0:3])
+    self.state[3:6] = unwrap(self.state[3:6] + step_length * (T @ self.state_dot[3:6]))
     return deepcopy(self.state)
 
-  def update_state_dot(self, time_step):
-    self.state_dot = self.state_dot + time_step*clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)
+  def update_state_dot(self, step_length):
+    self.state_dot = self.state_dot + step_length*clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)
 
   def read_sensors(self, environment, vector_format=True):
     readings = []

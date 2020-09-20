@@ -2,16 +2,18 @@ from abc import ABC, abstractmethod
 from logger.log_entry import LogEntry
 from logger.loggable import Loggable
 from plottable import Plottable
+from communication import CommunicationNode
 
 from copy import deepcopy
 from inspect import getmodule
 
-class Drone(Loggable, Plottable, ABC):
+class Drone(CommunicationNode, Loggable, Plottable, ABC):
 
     def __init__(self, d_id, state, sensors):
       self.id = d_id
       self.state = state
       self.sensors = sensors
+      super().__init__()
 
     @abstractmethod
     def update_state(self):
@@ -19,10 +21,6 @@ class Drone(Loggable, Plottable, ABC):
 
     @abstractmethod
     def read_sensors(self):
-        pass
-
-    @abstractmethod
-    def update_command(self):
         pass
     
     def get_info_entry(self):
