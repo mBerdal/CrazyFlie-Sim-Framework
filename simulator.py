@@ -12,6 +12,7 @@ from sensor.range_sensor import RangeSensor
 from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.spatial
 
 class Simulator():
 
@@ -49,8 +50,26 @@ class Simulator():
   
   def __sim_step(self, step_length, time):
     self.drone_swarm.sim_step(step_length, self.environment)
+    coords = None
+    if not time % 3:
+      coords = np.empty((3, len(self.drone_swarm.drones))).reshape(len(self.drone_swarm.drones),3) #3D
+    k = 0
     for d in self.drone_swarm.drones:
       self.logger.log_time_step(d.get_time_entry(), time)
+      if coords is not None:
+        coords[k,:] = d.state[0:3].reshape(1,3)
+        k = k+1
+    if coords is not None:
+      self.collision_check(coords)
+  
+  def collision_check(self, coords: dict):
+    dist_mat = scipy.spatial.distance.pdist(coords)
+    square_mat = scipy.spatial.distance.squareform(dist_mat)
+    collision_indices = np.argwhere(square_mat < 2)
+    
+    for indices in collision_indices:
+      if indices[0] != indices[1]:
+        print(f"WARNING: drone{indices[0]} and drone{indices[1]} collided")
 
   def visualize(self):
     fig, axis = plt.subplots(1)
