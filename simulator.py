@@ -16,7 +16,8 @@ import numpy as np
 class Simulator():
 
   def __init__(self, **kwargs) -> None:
-    self.to_file = kwargs.get("to_file", None)
+    self.log_to_file = kwargs.get("log_to_file", None)
+    self.env_to_file = kwargs.get("env_to_file", None)
     self.environment = kwargs.get("environment", None)
     self.drones = kwargs.get("drones", None)
     self.logger = kwargs.get("logger", None)
@@ -26,7 +27,7 @@ class Simulator():
 
     if not self.logger is None:
       self.environment = self.logger.get_environment()
-      self.step_length = self.logger.get_log_time_step()
+      self.step_length = self.logger.get_log_step_length()
       self.time_line = np.arange(0, self.logger.get_log_end_time() + self.step_length, self.step_length)
     else:
       com_channel = CommunicationChannel(
@@ -44,8 +45,8 @@ class Simulator():
     for time in self.time_line:
       self.__sim_step(step_length_seconds, time)
 
-    if not self.to_file is None:
-      self.logger.save_log(self.to_file)
+    if not self.log_to_file is None:
+      self.logger.save_log(self.log_to_file, self.env_to_file)
   
   def __sim_step(self, step_length, time):
     self.drone_swarm.sim_step(step_length, self.environment)

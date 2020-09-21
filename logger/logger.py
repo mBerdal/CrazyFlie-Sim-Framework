@@ -16,44 +16,6 @@ class Logger():
 
   Attributes
   ----------
-  environment: Environment/String/None
-
-    If None the Logger is in read_only mode. If not it points to either a file
-    containing a json dictionary representing an Environment object or an Environment
-    object itself.
-
-  trajectories: dict{some_float: list[dict{id: str, state: np.ndarray}]}
-
-    Dictionary where keys are timesteps [sec] and values are lists containing
-    dictionaries with an ID for a CrazyFlie drone and the state of the given
-    drone at said timestep
-
-  Methods
-  ----------
-  __init__(environment): None
-
-    Takes as optional argument an environment. If environment is None the logger is in
-    read-only mode, if not the logger is in write only mode. environment can either be
-    an Environment object or the location of a file containing a json representation of
-    an Environment object.
-  
-  read_log(filename): Environment, Dict
-
-    **only available on read-only mode**
-    Takes as argument a filename, and retrieves an enviroment object specified in the file and
-    a dictionary containing timesteps as keys and IDs and states of drones at given timestep as values.
-
-  write_to_log(timestep, drone_id, drone_state, measurements): None
-
-    **only available in write-only mode**
-    Takes as argument a timestep [sec], an ID for a drone, the state (n-by-1 matrix) of the drone, and the
-    sensor measurements at the timestep specified and stores it.
-
-  save_log(filename): None
-
-    **only available in read-only mode**
-    Takes as argument a filename and writes a json dict containing an entry for the environment variable of
-    the Logger and an entry for the trajectories of the Logger.
 
 """
 
@@ -119,7 +81,7 @@ class Logger():
   def log_info(self, log_entry) -> None:
     self.log["drones"][log_entry.id]["info"] = log_entry
 
-  def save_log(self, filename):
+  def save_log(self, filename, env_to_file = None):
     assert not filename is None, "filename not supplied. save_log failed"
 
     lg = deepcopy(self.log)
@@ -131,7 +93,12 @@ class Logger():
     if isinstance(self.log["environment"], str):
       lg["environment"] = {"path": self.log["environment"]}
     else:
-      lg["environment"] = self.log["environment"].to_JSONable()
+      if env_to_file is None:
+        lg["environment"] = self.log["environment"].to_JSONable()
+      else:
+        lg["environment"] = {"path": env_to_file}
+        write_json(env_to_file, self.log["environment"].to_JSONable())
+
     write_json(filename, lg)
 
   def get_environment(self):
@@ -146,7 +113,7 @@ class Logger():
   def get_log_end_time(self):
     return float(max(self.log["drones"][self.get_drone_ids()[0]]["trajectory"].keys()))
 
-  def get_log_time_step(self):
+  def get_log_step_length(self):
     it = iter(self.log["drones"][self.get_drone_ids()[0]]["trajectory"].keys())
     return -next(it) + next(it)
 
