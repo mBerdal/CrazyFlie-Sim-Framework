@@ -18,10 +18,10 @@ class RangeSensor(Sensor, Plottable):
 
     def __init__(self, sensor_pos_bdy: np.ndarray, sensor_attitude_bdy: np.ndarray, noise_generator = lambda: 0, **kwargs) -> None:
         super().__init__(noise_generator)
-        self.max_range = kwargs.get("max_range",4)
-        self.min_range = kwargs.get("min_range",0.04)
-        self.arc_angle = kwargs.get("arc_angle",np.deg2rad(27))
-        self.num_rays = kwargs.get("num_rays",11)
+        self.max_range = kwargs.get("max_range", 4)
+        self.min_range = kwargs.get("min_range", 0.04)
+        self.arc_angle = kwargs.get("arc_angle", np.deg2rad(27))
+        self.num_rays = kwargs.get("num_rays", 11)
         self.sensor_pos_bdy = sensor_pos_bdy
         self.sensor_attitude_bdy = sensor_attitude_bdy
         assert (not self.sensor_attitude_bdy is None) and (not self.sensor_pos_bdy is None),\

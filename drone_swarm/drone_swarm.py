@@ -8,7 +8,6 @@ class DroneSwarm(CommunicationNode):
         self.drones = drones
         self.controller = controller
         self.com_channel = com_channel
-        self.states = {drone.id: drone.state for drone in self.drones}
         min_ranges = []
         max_ranges = []
         for d in drones:
@@ -42,7 +41,14 @@ class DroneSwarm(CommunicationNode):
 
     def sim_step(self, time_step, environment):
       self.read_range_sensors(environment)
-      commands = self.controller.get_commands(self.states, {d.id: [s.get_reading() for s in d.sensors] for d in self.drones})
+      commands = self.controller.get_commands(
+        {
+          d.id: d.get_state_reading() for d in self.drones
+        },
+        {
+          d.id: [s.get_reading() for s in d.sensors] for d in self.drones
+        }
+      )
       self.distribute_commands(commands)
       self.update_all_states(time_step)
 

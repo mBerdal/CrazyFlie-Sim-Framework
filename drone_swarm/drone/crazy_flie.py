@@ -13,10 +13,10 @@ class CrazyFlie(Drone):
 
   def __init__(self, id,  state: np.ndarray, **kwargs) -> None:
     max_range_sensor = kwargs.get('max_range_sensor', 4)
-    range_res_sensor = kwargs.get('range_res_sensor',0.001)
-    arc_angle_sensor = kwargs.get("arc_angle_sensor",np.deg2rad(27))
-    num_beams_sensor = kwargs.get("num_beams_sensor",11)
-
+    range_res_sensor = kwargs.get('range_res_sensor', 0.001)
+    arc_angle_sensor = kwargs.get("arc_angle_sensor", np.deg2rad(27))
+    num_beams_sensor = kwargs.get("num_beams_sensor", 11)
+    state_noise_generator = kwargs.get("state_noise_generator", lambda: np.zeros(state.shape))
     sensors = [
       RangeSensor(
         np.array([((-1)**i)*0.01 if i == 0 or i == 2 else 0, ((-1)**i)*0.01 if i == 1 or i == 3 else 0, 0]).reshape(3, 1),
@@ -26,7 +26,7 @@ class CrazyFlie(Drone):
       ) for i in range(4)
     ]
 
-    super().__init__(id, state, sensors)
+    super().__init__(id, state, sensors, state_noise_generator)
     self.prev_state = state
 
     self.state_dot = np.zeros([6,1])
@@ -34,8 +34,8 @@ class CrazyFlie(Drone):
 
     self.command = np.zeros([6, 1])
 
-    acc_limits_lower_std = -np.array([1, 1, 1, np.deg2rad(10), np.deg2rad(10), np.deg2rad(10)]).reshape(6, 1)
     acc_limits_upper_std = np.array([1, 1, 1, np.deg2rad(10), np.deg2rad(10), np.deg2rad(10)]).reshape(6, 1)
+    acc_limits_lower_std = -acc_limits_upper_std
 
     self.acc_limits_lower = kwargs.get("acc_limits_lower", acc_limits_lower_std)
     self.acc_limits_upper = kwargs.get("acc_limits_upper", acc_limits_upper_std)
@@ -49,12 +49,12 @@ class CrazyFlie(Drone):
     self.sensor_idx = []
     start_ind = 0
     for s in self.sensors:
-      r,o, ma, mi = s.get_ray_vectors()
+      r, o, ma, mi = s.get_ray_vectors()
       rays.append(r)
       orgins.append(o)
       max_ranges.append(ma)
       min_ranges.append(mi)
-      self.sensor_idx.append({"start":start_ind,"end": start_ind+r.shape[1]})
+      self.sensor_idx.append({"start":start_ind, "end": start_ind+r.shape[1]})
       start_ind = start_ind + r.shape[1]
     self.rays = np.concatenate(rays,axis=1)
     self.orgins = np.concatenate(orgins,axis=1)
@@ -62,7 +62,7 @@ class CrazyFlie(Drone):
     self.min_ranges = np.concatenate(min_ranges)
 
   def get_sensor_rays(self):
-    rot_body_to_ned = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])
+    rot_body_to_ned = rot_matrix_zyx(self.state[3], self.state[4], self.state[5])
     rays = rot_body_to_ned @ self.rays
     orgins = rot_body_to_ned @ self.orgins + self.state[0:3]
     return rays, orgins, self.max_ranges, self.min_ranges
@@ -84,7 +84,6 @@ class CrazyFlie(Drone):
 
     self.state[0:3] = self.state[0:3] + step_length * (R @ self.state_dot[0:3])
     self.state[3:6] = unwrap(self.state[3:6] + step_length * (T @ self.state_dot[3:6]))
-    return deepcopy(self.state)
 
   def update_state_dot(self, step_length):
     self.state_dot = self.state_dot + step_length*clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)

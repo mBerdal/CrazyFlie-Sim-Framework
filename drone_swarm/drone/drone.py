@@ -3,16 +3,18 @@ from logger.log_entry import LogEntry
 from logger.loggable import Loggable
 from plottable import Plottable
 from communication import CommunicationNode
+from numpy import zeros
 
 from copy import deepcopy
 from inspect import getmodule
 
 class Drone(CommunicationNode, Loggable, Plottable, ABC):
 
-    def __init__(self, d_id, state, sensors):
+    def __init__(self, d_id, state, sensors, state_noise_generator = lambda: zeros(self.state.shape)):
       self.id = d_id
       self.state = state
       self.sensors = sensors
+      self.state_noise_generator = state_noise_generator
       super().__init__()
 
     @abstractmethod
@@ -22,6 +24,9 @@ class Drone(CommunicationNode, Loggable, Plottable, ABC):
     @abstractmethod
     def read_sensors(self):
         pass
+
+    def get_state_reading(self):
+      return deepcopy(self.state) + self.state_noise_generator()
     
     def get_info_entry(self):
       return LogEntry(
