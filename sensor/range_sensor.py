@@ -17,7 +17,7 @@ class RangeSensor(Sensor, Plottable):
     """
 
     def __init__(self, sensor_pos_bdy: np.ndarray, sensor_attitude_bdy: np.ndarray, noise_generator = lambda: 0, **kwargs) -> None:
-        super().__init__()
+        super().__init__(noise_generator)
         self.max_range = kwargs.get("max_range",4)
         self.min_range = kwargs.get("min_range",0.04)
         self.arc_angle = kwargs.get("arc_angle",np.deg2rad(27))
@@ -41,8 +41,8 @@ class RangeSensor(Sensor, Plottable):
           sensor_attitude_bdy = self.sensor_attitude_bdy
         )
 
-    def get_reading(self, objects, state_host: np.ndarray, return_all_beams = False) -> np.ndarray:
-        pass
+    def get_reading(self) -> float:
+      return self.measurement + self.noise_generator()
 
     def get_ray_vectors(self):
         return self.ray_vectors, self.ray_orgins, self.max_range_vector, self.min_range_vector

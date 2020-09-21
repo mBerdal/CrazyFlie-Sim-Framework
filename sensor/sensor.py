@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 class Sensor(Loggable, ABC):
     def __init__(self, noise_generator = lambda: 0):
       self.measurement = None
+      self.noise_generator = noise_generator
       super().__init__()
 
     @abstractmethod

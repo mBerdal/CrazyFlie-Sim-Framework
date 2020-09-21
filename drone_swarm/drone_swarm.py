@@ -29,8 +29,7 @@ class DroneSwarm(CommunicationNode):
         t_min[t_min < self.min_ranges] = self.min_ranges[t_min<self.min_ranges]
         for d in self.drones:
             local_readings = t_min[idx_drones[d.id]["start"]:idx_drones[d.id]["end"]]
-            sensor_idx = d.get_sensor_idx()
-            for i, idx in enumerate(sensor_idx):
+            for i, idx in enumerate(d.get_sensor_idx()):
                 d.sensors[i].measurement = np.min(local_readings[idx["start"]:idx["end"]])
 
     def update_all_states(self, time_step):
@@ -43,7 +42,7 @@ class DroneSwarm(CommunicationNode):
 
     def sim_step(self, time_step, environment):
       self.read_range_sensors(environment)
-      commands = self.controller.get_commands(self.states, {d.id: [s.measurement for s in d.sensors] for d in self.drones})
+      commands = self.controller.get_commands(self.states, {d.id: [s.get_reading() for s in d.sensors] for d in self.drones})
       self.distribute_commands(commands)
       self.update_all_states(time_step)
 
