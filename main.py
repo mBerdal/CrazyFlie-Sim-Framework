@@ -83,14 +83,12 @@ for o in objects:
 
 
 if __name__ == "__main__":
-  drones = [drones[0]]
-  set_points = [set_points[0]]
   c = SwarmController(drones,set_points)
-  s = Simulator(environment=env, drones=drones, controller=c, com_delay=0.1, log_to_file="test_0.txt", env_to_file="env_test_0.txt")
+  s = Simulator(environment=env, drones=drones, controller=c, com_delay=0.1, log_to_file="test_0.json", env_to_file="env_test_0.json")
   s.simulate(0.05, 10)
 
   k = Logger()
-  k.load_from_file("test_0.txt")
+  k.load_from_file("test_0.json")
   s = Simulator(logger = k)
   s.visualize()
 

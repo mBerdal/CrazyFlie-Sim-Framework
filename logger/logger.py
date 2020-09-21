@@ -28,12 +28,12 @@ class Logger():
       data = read_json(filename)
 
       drones_dict = data.get("drones", None)
-      assert not drones_dict is None, f"Drones not specified in file {filename}. Failed to read."
+      assert not drones_dict is None, f"Drones not specified in file {filename}. Failed loading from file."
 
       env_dict = data.get("environment", None)
-      assert not env_dict is None, f"Environment not specified in file {filename}. Failed to read."
+      assert not env_dict is None, f"Environment not specified in file {filename}. Failed loading from file."
 
-      assert "trajectory" in dict(next(iter(drones_dict.values()))).keys(), f"Trajectories not specified in file {filename}. Failed to read."
+      assert "trajectory" in dict(next(iter(drones_dict.values()))).keys(), f"Trajectories not specified in file {filename}. Failed loading from file."
       traj_dict = {id: drone_dict["trajectory"] for id, drone_dict in drones_dict.items()}
 
       if "path" in env_dict.keys():
@@ -68,9 +68,9 @@ class Logger():
             float(time)
           )
       
-    except FileNotFoundError as fnfe:
-      print(fnfe)
-      return False
+    except FileNotFoundError:
+      print(f"Could not find file named {filename}. Loading log file failed. Exiting.")
+      exit(0)
 
   def log_time_step(self, log_entry, timestep) -> None:
     try:
