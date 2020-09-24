@@ -34,7 +34,7 @@ for i in range(num_drones):
   y = np.random.uniform(y_lim_l,y_lim_u)
   z = np.random.uniform(z_lim_l,z_lim_u)
   yaw = np.random.uniform(yaw_lim_l,yaw_lim_u)
-  state = np.array([x,y,z,0,0,yaw]).reshape((6,1))
+  state = np.concatenate((np.array([x,y,z,0,0,yaw]).reshape((6,1)), np.zeros((6, 1))))
   drones.append(CrazyFlie(i, state, state_noise_generator=lambda: np.random.uniform(-0.1, 0.1, state.shape)))
   x_set = np.random.uniform(x_lim_l,x_lim_u)
   y_set = np.random.uniform(y_lim_l,y_lim_u)

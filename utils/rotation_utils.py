@@ -28,3 +28,16 @@ def angular_transformation_matrix_zyx(phi: float, theta: float):
 		[0, sin_phi/cos_theta, cos_phi/cos_theta]
 	])
 	return t
+
+def skew_sym(vec):
+  return np.array([
+    [0, -vec.item(2), vec.item(1)],
+    [vec.item(2), 0, -vec.item(0)],
+    [-vec.item(1), vec.item(0), 0]
+  ]).reshape(3, 3)
+
+def unwrap_angle(angle):
+  return angle % 2*np.pi if angle > 2*np.pi or angle < 0 else angle
+
+def unwrap_angles(angles):
+  return np.array([unwrap_angle(angles[i]) for i in range(len(angles))])

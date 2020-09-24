@@ -10,11 +10,11 @@ from inspect import getmodule
 
 class Drone(CommunicationNode, Loggable, Plottable, ABC):
 
-    def __init__(self, d_id, state, sensors, state_noise_generator = lambda: zeros(self.state.shape)):
+    def __init__(self, d_id, eom, sensors, state_noise_generator = lambda: zeros(self.eom.get_state().shape)):
       self.id = d_id
-      self.state = state
       self.sensors = sensors
       self.state_noise_generator = state_noise_generator
+      self.eom = eom
       super().__init__()
 
     @abstractmethod
@@ -26,7 +26,7 @@ class Drone(CommunicationNode, Loggable, Plottable, ABC):
         pass
 
     def get_state_reading(self):
-      return deepcopy(self.state) + self.state_noise_generator()
+      return deepcopy(self.eom.get_state()) + self.state_noise_generator()
     
     def get_info_entry(self):
       return LogEntry(
@@ -41,7 +41,7 @@ class Drone(CommunicationNode, Loggable, Plottable, ABC):
     def get_time_entry(self):
       return LogEntry(
         id = self.id,
-        state = deepcopy(self.state),
+        state = self.eom.get_state(),
         measurements = [
           s.get_time_entry() for s in self.sensors
         ]

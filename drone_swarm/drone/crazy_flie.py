@@ -1,7 +1,9 @@
 from sensor.range_sensor import RangeSensor
 from drone_swarm.drone.drone import Drone
 from logger.log_entry import LogEntry
-from utils.rotation_utils import rot_matrix_zyx, angular_transformation_matrix_zyx
+from utils.rotation_utils import rot_matrix_zyx, angular_transformation_matrix_zyx, skew_sym
+from eom import Eom
+from quad_controller import QuadController
 
 from matplotlib.patches import Circle
 
@@ -10,8 +12,10 @@ from math import pi
 from copy import deepcopy
 
 class CrazyFlie(Drone):
+  inerta_matrix = np.diag([8.5532*10**(-3), 8.5532*10**(-3), 1.476*10**(-2)])
+  mass = 9.64*10**(-1)
 
-  def __init__(self, id,  state: np.ndarray, **kwargs) -> None:
+  def __init__(self, id, state: np.ndarray, **kwargs) -> None:
     max_range_sensor = kwargs.get('max_range_sensor', 4)
     range_res_sensor = kwargs.get('range_res_sensor', 0.001)
     arc_angle_sensor = kwargs.get("arc_angle_sensor", np.deg2rad(27))
@@ -25,20 +29,30 @@ class CrazyFlie(Drone):
         num_rays=num_beams_sensor
       ) for i in range(4)
     ]
+    
+    def diff_eqn(t, state, forces, torques):
+      R = rot_matrix_zyx(state[3], state[4], state[5])
+      z = np.zeros((3, 3))
+      n_dot = (np.block([
+        [R, z],
+        [z, angular_transformation_matrix_zyx(state[3], state[4])]
+      ])@state[6:12]).reshape(6, 1)
+      M_RB_inv = np.block([
+        [(1/self.mass)*np.eye(3), z],
+        [z, np.diag([1/self.inerta_matrix[0, 0], 1/self.inerta_matrix[1, 1], 1/self.inerta_matrix[2, 2]])]
+      ])
+      s = skew_sym(self.mass*state[6:9])
+      C_RB = np.block([
+        [z, -s],
+        [-s, -skew_sym(self.inerta_matrix@state[9:12])]
+      ])
+      t_RB = np.concatenate((R.T@Eom.__g__ + forces, torques))
+      v_dot = M_RB_inv@(-(C_RB@state[6:12]).reshape(6, 1) + t_RB)
+      return np.concatenate((n_dot, v_dot)).reshape(12, )
 
-    super().__init__(id, state, sensors, state_noise_generator)
-    self.prev_state = state
-
-    self.state_dot = np.zeros([6,1])
-    self.prev_state_dot = np.zeros([6,1])
-
+    super().__init__(id, Eom(state, diff_eqn), sensors, state_noise_generator)
+    self.controller = QuadController()
     self.command = np.zeros([6, 1])
-
-    acc_limits_upper_std = np.array([1, 1, 1, np.deg2rad(10), np.deg2rad(10), np.deg2rad(10)]).reshape(6, 1)
-    acc_limits_lower_std = -acc_limits_upper_std
-
-    self.acc_limits_lower = kwargs.get("acc_limits_lower", acc_limits_lower_std)
-    self.acc_limits_upper = kwargs.get("acc_limits_upper", acc_limits_upper_std)
 
     # Sensor parameters
 
@@ -62,9 +76,10 @@ class CrazyFlie(Drone):
     self.min_ranges = np.concatenate(min_ranges)
 
   def get_sensor_rays(self):
-    rot_body_to_ned = rot_matrix_zyx(self.state[3], self.state[4], self.state[5])
+    state = self.eom.get_state()
+    rot_body_to_ned = rot_matrix_zyx(state[3], state[4], state[5])
     rays = rot_body_to_ned @ self.rays
-    orgins = rot_body_to_ned @ self.orgins + self.state[0:3]
+    orgins = rot_body_to_ned @ self.orgins + state[0:3]
     return rays, orgins, self.max_ranges, self.min_ranges
 
   def get_sensor_limits(self):
@@ -78,23 +93,16 @@ class CrazyFlie(Drone):
       if msg.data_type == "command":
         self.command = msg.data
 
-    self.update_state_dot(step_length)
-    R = rot_matrix_zyx(self.state[3],self.state[4],self.state[5])
-    T = angular_transformation_matrix_zyx(self.state[3],self.state[4])
-
-    self.state[0:3] = self.state[0:3] + step_length * (R @ self.state_dot[0:3])
-    self.state[3:6] = unwrap(self.state[3:6] + step_length * (T @ self.state_dot[3:6]))
-
-  def update_state_dot(self, step_length):
-    self.state_dot = self.state_dot + step_length*clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)
+    forces, torques = self.controller.get_inputs(self.eom.get_state(), 0, 0, -1, 0, step_length, self.mass, self.inerta_matrix)
+    self.eom.step(step_length, forces, torques)
 
   def read_sensors(self, environment, vector_format=True):
     readings = []
     for s in self.sensors:
       if vector_format:
-        readings.append(s.get_reading(environment.get_objects(),self.state))
+        readings.append(s.get_reading(environment.get_objects(), self.eom.get_state()))
       else:
-        readings.append(np.linalg.norm(s.get_reading(environment.get_objects(),self.state)).item())
+        readings.append(np.linalg.norm(s.get_reading(environment.get_objects(), self.eom.get_state())).item())
     return readings
 
 
@@ -107,26 +115,3 @@ class CrazyFlie(Drone):
   @staticmethod
   def update_plot(fig, state, **kwargs):
     fig.set_center(state[0:2])
-
-def unwrap(angles):
-  angles[0] = angles[0] % 2*pi if angles[0] > 2*pi or angles[0] < 0 else angles[0]
-  angles[1] = angles[1] % 2*pi if angles[1] > 2*pi or angles[1] < 0 else angles[1]
-  angles[2] = angles[2] % 2*pi if angles[2] > 2*pi or angles[2] < 0 else angles[2]
-  return angles
-
-def clip(array, lower_bound, upper_bound):
-  array[0] = max(min(array[0], upper_bound[0]), lower_bound[0])
-  array[1] = max(min(array[1], upper_bound[1]), lower_bound[1])
-  array[2] = max(min(array[2], upper_bound[2]), lower_bound[2])
-  array[3] = max(min(array[3], upper_bound[3]), lower_bound[3])
-  array[4] = max(min(array[4], upper_bound[4]), lower_bound[4])
-  array[5] = max(min(array[5], upper_bound[5]), lower_bound[5])
-  return array
-
-def test():
-  state = np.array([5, 5, 0, 0, 0, 0]).reshape((6, 1))
-  id = 1
-  cf = CrazyFlie(id,state)
-  rays, orgins = cf.get_sensor_rays()
-  print(rays)
-  print(orgins)
