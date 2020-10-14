@@ -28,3 +28,10 @@ def angular_transformation_matrix_zyx(phi: float, theta: float):
 		[0, sin_phi/cos_theta, cos_phi/cos_theta]
 	])
 	return t
+
+def rot_matrix_2d(theta):
+	cos_theta = cos(theta)
+	sin_theta = sin(theta)
+
+	r = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
+	return r

@@ -9,7 +9,7 @@ from logger.logger import Logger
 import numpy as np
 
 np.random.seed(0)
-num_drones = 2
+num_drones = 3
 plot = False
 plot_rays = True
 steps = 300
@@ -85,7 +85,7 @@ for o in objects:
 if __name__ == "__main__":
   c = SwarmController(drones,set_points)
   s = Simulator(environment=env, drones=drones, controller=c, com_delay=0.1, log_to_file="test_0.json", env_to_file="env_test_0.json")
-  s.simulate(0.05, 10)
+  s.simulate(0.05, 20)
 
   k = Logger()
   k.load_from_file("test_0.json")
