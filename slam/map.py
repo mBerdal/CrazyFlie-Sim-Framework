@@ -23,6 +23,8 @@ class SLAM_map():
         self.size_y = size_y+2
         self.res = res
 
+        self.max_range = 4
+
         self.log_free = np.log(p_free / (1 - p_free))
         self.log_occupied = np.log(p_occupied / (1 - p_occupied))
         self.log_prior = np.log(p_prior / (1 - p_prior))
@@ -41,10 +43,12 @@ class SLAM_map():
 
         for meas, ray in zip(measurments,ray_vectors):
             if meas == np.inf:
-                continue
-            end_point = pose[0:2] + rot_matrix_2d(pose[2]) @ ray * meas
+                end_point = pose[0:2] + rot_matrix_2d(pose[2]) @ ray * self.max_range
+            else:
+                end_point = pose[0:2] + rot_matrix_2d(pose[2]) @ ray * meas
+
             end_point_cell = self.world_coordinate_to_grid_cell(end_point)
-            if self.cell_in_grid(end_point_cell):
+            if self.cell_in_grid(end_point_cell) and meas != np.inf:
                 self.log_prob_map[end_point_cell[0],end_point_cell[1]] += self.log_occupied
             free_cells = self.grid_traversal(pose[0:2], end_point)
             for cell in free_cells:
@@ -118,10 +122,10 @@ class SLAM_map():
         return exp_grid/(1+exp_grid)
 
 def rot_matrix_2d(theta):
-	cos_theta = cos(theta)
-	sin_theta = sin(theta)
-	r = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
-	return r
+    cos_theta = cos(theta)
+    sin_theta = sin(theta)
+    r = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
+    return r
 
 def test():
     num_beams = 36
@@ -131,7 +135,7 @@ def test():
     rays = []
     for i in range(num_beams):
         dist = np.random.uniform(0,4)
-        bearing = np.random.uniform(0,2*np.pi)
+        bearing = np.random.uniform(-np.pi,np.pi)
         meas_v2.append(np.array([dist,bearing]))
         meas.append(dist)
         ray = np.array([sin(bearing),cos(bearing)])
