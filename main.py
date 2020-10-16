@@ -1,6 +1,6 @@
 from environment.environment import Environment
 from environment.obstacle import Obstacle
-from drone_swarm.drone.crazy_flie import CrazyFlie
+from drone_swarm.drone.crazy_flie import CrazyFlie, CrazyFlieLidar
 from communication import CommunicationChannel, CommunicationNode
 from simulator import Simulator
 from controller import SwarmController
@@ -9,7 +9,7 @@ from logger.logger import Logger
 import numpy as np
 
 np.random.seed(0)
-num_drones = 3
+num_drones = 1
 plot = False
 plot_rays = True
 steps = 300
@@ -35,7 +35,7 @@ for i in range(num_drones):
   z = np.random.uniform(z_lim_l,z_lim_u)
   yaw = np.random.uniform(yaw_lim_l,yaw_lim_u)
   state = np.array([x,y,z,0,0,yaw]).reshape((6,1))
-  drones.append(CrazyFlie(i, state, state_noise_generator=lambda: np.random.uniform(-0.1, 0.1, state.shape)))
+  drones.append(CrazyFlieLidar(i, state, state_noise_generator=lambda: np.random.uniform(-0.1, 0.1, state.shape)))
   x_set = np.random.uniform(x_lim_l,x_lim_u)
   y_set = np.random.uniform(y_lim_l,y_lim_u)
   z_set = np.random.uniform(z_lim_l,z_lim_u)
@@ -86,7 +86,7 @@ if __name__ == "__main__":
   c = SwarmController(drones,set_points)
   s = Simulator(environment=env, drones=drones, controller=c, com_delay=0.1, log_to_file="test_0.json", env_to_file="env_test_0.json")
   s.simulate(0.05, 20)
-
+  s.visualize()
   k = Logger()
   k.load_from_file("test_0.json")
   s = Simulator(logger = k)

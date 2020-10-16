@@ -95,7 +95,6 @@ def multi_ray_intersect_triangle(ray_orgins, ray_vectors,triangle, max_range,ret
     f = 1.0/a
     s = ray_orgins - vertex0
 
-    #u = f*np.dot(s,h)
     u = f*np.einsum('ij,ij->i', s, h)
 
     tm1 = u<0.0

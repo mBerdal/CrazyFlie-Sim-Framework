@@ -44,6 +44,9 @@ class RangeSensor(Sensor, Plottable):
     def get_reading(self) -> float:
       return self.measurement + self.noise_generator()
 
+    def add_measurement(self,measurements):
+        self.measurement = np.min(measurements)
+
     def get_ray_vectors(self):
         return self.ray_vectors, self.ray_orgins, self.max_range_vector, self.min_range_vector
 

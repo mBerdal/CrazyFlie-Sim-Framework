@@ -29,7 +29,7 @@ class DroneSwarm(CommunicationNode):
         for d in self.drones:
             local_readings = t_min[idx_drones[d.id]["start"]:idx_drones[d.id]["end"]]
             for i, idx in enumerate(d.get_sensor_idx()):
-                d.sensors[i].measurement = np.min(local_readings[idx["start"]:idx["end"]])
+                d.sensors[i].add_measurement(local_readings[idx["start"]:idx["end"]])
 
     def update_all_states(self, time_step):
       for d in self.drones:

@@ -2,6 +2,10 @@ import numpy as np
 from math import sin, cos
 import time
 import matplotlib.pyplot as plt
+from logger.logger import Logger
+from sensor.lidar_sensor import LidarSensor
+from matplotlib.animation import FuncAnimation
+from matplotlib import animation
 
 class SLAM_map():
     """
@@ -18,7 +22,7 @@ class SLAM_map():
 
     """
 
-    def __init__(self, size_x=1000, size_y=1000, res = 0.1, p_prior=0.5, p_occupied=0.8, p_free=0.2):
+    def __init__(self, size_x=1000, size_y=1000, res = 0.1, p_prior=0.5, p_occupied=0.7, p_free=0.3):
         self.size_x = size_x+2
         self.size_y = size_y+2
         self.res = res
@@ -40,48 +44,28 @@ class SLAM_map():
         self.beta = 2*np.pi/180
 
     def integrate_scan(self, pose, measurments, ray_vectors):
-
-        for meas, ray in zip(measurments,ray_vectors):
+        ray_vectors = rot_matrix_2d(pose[2]) @ ray_vectors[0:2,:]
+        for i in range(measurments.size):
+            meas = measurments[i]
+            if meas > self.max_range + 0.1 and meas != np.inf:
+                print("Weird measurments")
+                continue
+            ray = ray_vectors[0:2,i].reshape(2,1)
             if meas == np.inf:
-                end_point = pose[0:2] + rot_matrix_2d(pose[2]) @ ray * self.max_range
+                end_point = pose[0:2] + ray * self.max_range
             else:
-                end_point = pose[0:2] + rot_matrix_2d(pose[2]) @ ray * meas
+                end_point = pose[0:2] + ray * meas
 
             end_point_cell = self.world_coordinate_to_grid_cell(end_point)
             if self.cell_in_grid(end_point_cell) and meas != np.inf:
                 self.log_prob_map[end_point_cell[0],end_point_cell[1]] += self.log_occupied
             free_cells = self.grid_traversal(pose[0:2], end_point)
             for cell in free_cells:
-                self.log_prob_map[cell[0],cell[1]] += self.log_free
-
-    def integrate_scan_v2(self,pose, z):
-        dx = self.grid_position_m.copy()  # A tensor of coordinates of all cells
-        dx[0, :, :] -= pose[0]  # A matrix of all the x coordinates of the cell
-        dx[1, :, :] -= pose[1]  # A matrix of all the y coordinates of the cell
-        theta_to_grid = np.arctan2(dx[1, :, :], dx[0, :, :]) - pose[2]  # matrix of all bearings from robot to cell
-
-        # Wrap to +pi / - pi
-        theta_to_grid[theta_to_grid > np.pi] -= 2. * np.pi
-        theta_to_grid[theta_to_grid < -np.pi] += 2. * np.pi
-
-        dist_to_grid = np.linalg.norm(dx, axis=0)  # matrix of L2 distance to all cells from robot
-
-        # For each laser beam
-        for z_i in z:
-            r = z_i[0]  # range measured
-            b = z_i[1]  # bearing measured
-
-            # Calculate which cells are measured free or occupied, so we know which cells to update
-            # Doing it this way is like a billion times faster than looping through each cell (because vectorized numpy is the only way to numpy)
-            free_mask = (np.abs(theta_to_grid - b) <= self.beta / 2.0) & (dist_to_grid < (r - self.alpha / 2.0))
-            occ_mask = (np.abs(theta_to_grid - b) <= self.beta / 2.0) & (np.abs(dist_to_grid - r) <= self.alpha / 2.0)
-
-            # Adjust the cells appropriately
-            self.log_prob_map[occ_mask] += self.log_occupied
-            self.log_prob_map[free_mask] += self.log_free
+                if self.cell_in_grid(cell) and np.any(cell != end_point_cell):
+                    self.log_prob_map[cell[0],cell[1]] += self.log_free
 
     def world_coordinate_to_grid_cell(self,coord):
-        cell = np.array([np.int(coord[0]/self.res) + self.center_x, np.int(coord[1]/self.res)+self.center_y])
+        cell = np.array([np.int(np.floor(coord[0]/self.res)) + self.center_x, np.int(np.floor(coord[1]/self.res))+self.center_y])
         return cell
 
     def cell_in_grid(self, cell):
@@ -106,15 +90,26 @@ class SLAM_map():
         tdeltaX = self.res/ray[0]*stepX if ray[0] != 0 else np.inf
         tdeltaY = self.res/ray[1]*stepY if ray[1] != 0 else np.inf
 
+        neg_ray = False
+        diff = np.zeros(2,np.int)
+        if current_cell[0] != last_cell[0] and ray[0]<0:
+            diff[0] -= 1
+            neg_ray = True
+        if current_cell[1] != last_cell[1] and ray[1]<0:
+            diff[1] -= 1
+            neg_ray = True
+        if neg_ray:
+            visited_cells.append(current_cell.copy())
+            current_cell += diff
+
         while np.any(current_cell != last_cell) and self.cell_in_grid(current_cell):
             visited_cells.append(current_cell.copy())
-            if tmaxX < tmaxY:
+            if tmaxX <= tmaxY:
                 current_cell[0] += stepX
                 tmaxX += tdeltaX
             else:
                 current_cell[1] += stepY
                 tmaxY += tdeltaY
-
         return visited_cells
 
     def convert_grid_to_prob(self):
@@ -128,43 +123,39 @@ def rot_matrix_2d(theta):
     return r
 
 def test():
-    num_beams = 36
-    map = SLAM_map()
-    meas = []
-    meas_v2 = []
-    rays = []
-    for i in range(num_beams):
-        dist = np.random.uniform(0,4)
-        bearing = np.random.uniform(-np.pi,np.pi)
-        meas_v2.append(np.array([dist,bearing]))
-        meas.append(dist)
-        ray = np.array([sin(bearing),cos(bearing)])
-        rays.append(ray/np.linalg.norm(ray))
-    pose = np.array([0,0,0])
+    file = "test_lidar.json"
+    log = Logger()
+    log.load_from_file("test_lidar.json")
+    measurements = log.get_drone_sensor_measurements("0",0)
+    states = log.get_drone_states("0")
+    sensor_specs = log.get_drone_sensor_specs("0",0)
 
-    prior = map.convert_grid_to_prob()
+    sensor = LidarSensor(sensor_specs.sensor_pos_bdy,sensor_specs.sensor_attitude_bdy,num_rays=72)
+    rays = sensor.ray_vectors
 
-    start = time.time()
-    map.integrate_scan(pose,meas,rays)
-    end = time.time()
+    map = SLAM_map(size_x=400,size_y=400)
+    maps = []
+    for i in range(0,states["steps"],10):
+        meas = measurements["measurements"][i]
+        pose = states["states"][i][[0,1,5]]
+        map.integrate_scan(pose,meas,rays)
+        if i % 20 == 0:
+            maps.append({"map":map.convert_grid_to_prob(),"pose":pose,"time":i*states["step_length"]})
 
-    posterior = map.convert_grid_to_prob()
-    plt.figure()
-    plt.imshow(posterior, 'Greys')
+    def visualize():
+        fig, axis = plt.subplots(1)
+        drone = plt.Circle((states["states"][0][0] / map.res + map.center_x, states["states"][0][1] / map.res + map.center_y), radius=1,color="red")
+        axis.add_patch(drone)
+        def animate(t):
+            axis.axis("equal")
+            axis.set_title("Time: {:.2f}".format(t["time"]))
+            axis.imshow(t["map"].transpose(),"Greys",origin="lower")
+            drone.set_center([t["pose"][0] / map.res + map.center_x, t["pose"][1] / map.res + map.center_y])
+        anim = FuncAnimation(fig, animate, frames=maps, repeat=False, blit=False, interval=500)
 
-
-    map = SLAM_map()
-    start_v2 = time.time()
-    map.integrate_scan_v2(pose,meas_v2)
-    end_v2 = time.time()
-
-    posterior = map.convert_grid_to_prob()
-    plt.figure()
-    plt.imshow(posterior, 'Greys')
-    plt.show()
-
-    print("Time version 1:",end-start)
-    print("Time version 2:",end_v2-start_v2)
+        plt.draw()
+        plt.show()
+    visualize()
 
 if __name__ == "__main__":
     test()

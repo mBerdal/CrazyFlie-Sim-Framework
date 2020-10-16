@@ -14,6 +14,10 @@ class Sensor(Loggable, ABC):
     def get_reading(self, environment):
         pass
 
+    @abstractmethod
+    def add_measurement(self,measurements):
+        pass
+
     def generate_time_entry(self, measurement):
       return LogEntry(
         measurement = measurement

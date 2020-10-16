@@ -63,7 +63,7 @@ class Logger():
           self.log_time_step(
             drone.generate_time_entry(
               np.array(state_meas_dict["state"]),
-              [float(m["measurement"]) for m in state_meas_dict["measurements"]]
+              [np.array(m["measurement"]) for m in state_meas_dict["measurements"]]
             ),
             float(time)
           )
@@ -155,3 +155,22 @@ class Logger():
 
   def __get_drone_sensor_specs(self, drone_id, sensor_idx):
     return self.log["drones"][drone_id]["info"].sensors[sensor_idx]
+
+  def get_drone_sensor_measurements(self,drone_id,sensor_idx):
+    measurements = {}
+    step_length = self.get_log_step_length()
+    end_time = self.get_log_end_time()
+    for i in range(np.int(end_time/step_length)):
+        measurements[i] =  self.__get_drone_sensor_measurements_at_time(drone_id,sensor_idx,i*step_length)
+    return {"step_length": step_length, "steps": i, "measurements": measurements}
+
+  def get_drone_states(self,drone_id):
+    states = {}
+    step_length = self.get_log_step_length()
+    end_time = self.get_log_end_time()
+    for i in range(np.int(end_time/step_length)):
+      states[i] = self.__get_drone_state_at_time(drone_id,i*step_length)
+    return {"step_length": step_length,"steps": i, "states": states}
+
+  def get_drone_sensor_specs(self,drone_id, sensor_idx):
+    return self.__get_drone_sensor_specs(drone_id,sensor_idx)
