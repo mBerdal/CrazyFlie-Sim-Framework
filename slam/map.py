@@ -1,6 +1,7 @@
 import numpy as np
 from math import sin, cos
 import time
+import copy
 import matplotlib.pyplot as plt
 from logger.logger import Logger
 from sensor.lidar_sensor import LidarSensor
@@ -22,34 +23,29 @@ class SLAM_map():
 
     """
 
-    def __init__(self, size_x=1000, size_y=1000, res = 0.1, p_prior=0.5, p_occupied=0.7, p_free=0.3):
-        self.size_x = size_x+2
-        self.size_y = size_y+2
-        self.res = res
+    def __init__(self, **kwargs):
+        self.size_x = kwargs.get("size_x",400)
+        self.size_y = kwargs.get("size_y",400)
+        self.res = kwargs.get("res",0.1)
 
-        self.max_range = 4
+        self.max_range = kwargs.get("max_range",4)
 
-        self.log_free = np.log(p_free / (1 - p_free))
-        self.log_occupied = np.log(p_occupied / (1 - p_occupied))
-        self.log_prior = np.log(p_prior / (1 - p_prior))
+        self.p_free = kwargs.get("p_free",0.3)
+        self.p_occupied = kwargs.get("p_occupied",0.7)
+        self.p_prior = kwargs.get("p_prior",0.5)
+        self.log_free = np.log(self.p_free / (1 - self.p_free))
+        self.log_occupied = np.log(self.p_occupied / (1 - self.p_occupied))
+        self.log_prior = np.log(self.p_prior / (1 - self.p_prior))
 
         self.center_x = np.int(self.size_x/2)
         self.center_y = np.int(self.size_y/2)
 
         self.log_prob_map = np.ones((self.size_x, self.size_y))*self.log_prior
-        self.grid_position_m = np.array(
-            [np.tile(np.arange(0, self.size_x * self.res, self.res)[:, None], (1, self.size_y))-self.center_x*self.res,
-             np.tile(np.arange(0, self.size_y * self.res, self.res)[:, None].T, (self.size_x, 1))-self.center_y*self.res])
-        self.alpha = 0.2
-        self.beta = 2*np.pi/180
 
     def integrate_scan(self, pose, measurments, ray_vectors):
         ray_vectors = rot_matrix_2d(pose[2]) @ ray_vectors[0:2,:]
         for i in range(measurments.size):
             meas = measurments[i]
-            if meas > self.max_range + 0.1 and meas != np.inf:
-                print("Weird measurments")
-                continue
             ray = ray_vectors[0:2,i].reshape(2,1)
             if meas == np.inf:
                 end_point = pose[0:2] + ray * self.max_range
@@ -57,12 +53,17 @@ class SLAM_map():
                 end_point = pose[0:2] + ray * meas
 
             end_point_cell = self.world_coordinate_to_grid_cell(end_point)
-            if self.cell_in_grid(end_point_cell) and meas != np.inf:
-                self.log_prob_map[end_point_cell[0],end_point_cell[1]] += self.log_occupied
+            if meas != np.inf:
+                try:
+                    self.log_prob_map[end_point_cell[0],end_point_cell[1]] += self.log_occupied
+                except:
+                    pass
             free_cells = self.grid_traversal(pose[0:2], end_point)
             for cell in free_cells:
-                if self.cell_in_grid(cell) and np.any(cell != end_point_cell):
+                try:
                     self.log_prob_map[cell[0],cell[1]] += self.log_free
+                except:
+                    pass
 
     def world_coordinate_to_grid_cell(self,coord):
         cell = np.array([np.int(np.floor(coord[0]/self.res)) + self.center_x, np.int(np.floor(coord[1]/self.res))+self.center_y])
@@ -102,7 +103,7 @@ class SLAM_map():
             visited_cells.append(current_cell.copy())
             current_cell += diff
 
-        while np.any(current_cell != last_cell) and self.cell_in_grid(current_cell):
+        while np.any(current_cell != last_cell):
             visited_cells.append(current_cell.copy())
             if tmaxX <= tmaxY:
                 current_cell[0] += stepX
@@ -115,6 +116,11 @@ class SLAM_map():
     def convert_grid_to_prob(self):
         exp_grid = np.exp(self.log_prob_map)
         return exp_grid/(1+exp_grid)
+
+    def __deepcopy__(self, memodict={}):
+        m = SLAM_map(size_x=self.size_x,size_y=self.size_y,res=self.res)
+        m.log_prob_map = copy.deepcopy(self.log_prob_map)
+        return m
 
 def rot_matrix_2d(theta):
     cos_theta = cos(theta)
@@ -130,7 +136,7 @@ def test():
     states = log.get_drone_states("0")
     sensor_specs = log.get_drone_sensor_specs("0",0)
 
-    sensor = LidarSensor(sensor_specs.sensor_pos_bdy,sensor_specs.sensor_attitude_bdy,num_rays=72)
+    sensor = LidarSensor(sensor_specs.sensor_pos_bdy,sensor_specs.sensor_attitude_bdy,num_rays=144)
     rays = sensor.ray_vectors
 
     map = SLAM_map(size_x=400,size_y=400)

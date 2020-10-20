@@ -35,3 +35,8 @@ def rot_matrix_2d(theta):
 
 	r = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
 	return r
+
+
+def ssa(ang1, ang2):
+    diff = ang1-ang2
+    return ((diff+np.pi) % (2*np.pi)) - np.pi

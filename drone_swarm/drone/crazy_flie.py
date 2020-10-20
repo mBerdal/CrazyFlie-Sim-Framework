@@ -215,11 +215,3 @@ def clip(array, lower_bound, upper_bound):
   array[4] = max(min(array[4], upper_bound[4]), lower_bound[4])
   array[5] = max(min(array[5], upper_bound[5]), lower_bound[5])
   return array
-
-def test():
-  state = np.array([5, 5, 0, 0, 0, 0]).reshape((6, 1))
-  id = 1
-  cf = CrazyFlie(id,state)
-  rays, orgins = cf.get_sensor_rays()
-  print(rays)
-  print(orgins)

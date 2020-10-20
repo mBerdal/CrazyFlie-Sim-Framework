@@ -5,11 +5,13 @@ from slam.map import SLAM_map
 import time
 from scipy.signal import convolve2d
 import matplotlib.pyplot as plt
+from utils.misc import gaussian_kernel_2d
+from utils.rotation_utils import rot_matrix_2d
 
 class ScanMatcher():
 
-    def __init__(self, max_iterations=5, delta_x=0.1, delta_y=0.1, delta_theta=np.pi*10/180, max_sensor_range=5.0, step=1):
-        self.max_sensor_range = max_sensor_range
+    def __init__(self, **kwargs):
+        self.max_sensor_range = kwargs.get("max_sensor_range",4)
         self.padding_dist = 2.0
 
         self.sigma_hit = 0.1
@@ -17,19 +19,21 @@ class ScanMatcher():
         self.z_random = 0.001
         self.z_max = 0.2
 
-        self.max_iterations = max_iterations
+        self.initial_step = kwargs.get("step",1)
+        self.max_iterations = kwargs.get("max_iterations",10)
 
-        self.delta_x = delta_x
-        self.delta_y = delta_y
-        self.delta_theta = delta_theta
+        self.delta_x = kwargs.get("delta_x",0.1)
+        self.delta_y = kwargs.get("delta_y",0.1)
+        self.delta_theta = kwargs.get("delta_theta",np.pi*10/180)
         self.perturbations = [np.array([-self.delta_x, 0, 0]), np.array([self.delta_x, 0, 0]),
                               np.array([0, -self.delta_y, 0]), np.array([0, self.delta_y, 0]),
                               np.array([0, 0, -self.delta_theta]), np.array([0, 0, self.delta_theta])]
 
-        self.initial_step = step
 
-        self.kernal = gaussian_kernal_2d(5,0.5)
-        self.occ_threshold = 0.7
+        self.kernel_size = kwargs.get("kernel_size",5)
+        self.kernel_var = kwargs.get("kernel_var",1)
+        self.kernel = gaussian_kernel_2d(self.kernel_size, self.kernel_var)
+        self.occ_threshold = kwargs.get("occ_threshold",0.7)
 
     def scan_match(self, rays, meas, initial_pose, map):
         map_res = map.res
@@ -55,7 +59,8 @@ class ScanMatcher():
                 step = step/2
             iterations += 1
             current_pose = best_pose
-        return best_pose
+        best_pose[2] = best_pose[2] % (2*np.pi)
+        return best_pose.reshape(3,1)
 
     def score_scan(self, rays, measurements, pose, like_field, lower_x, lower_y, map_res):
         q = 0
@@ -85,49 +90,9 @@ class ScanMatcher():
 
         binary_field = prob_field > np.log(self.occ_threshold/(1-self.occ_threshold))
 
-        like_field = convolve2d(binary_field, self.kernal, mode="same")
+        like_field = convolve2d(binary_field, self.kernel, mode="same")
 
         unknown_area = prob_field == 0
-        like_field[unknown_area] = 1/self.max_sensor_range**2
+        like_field[unknown_area] = 1/self.max_sensor_range
 
         return like_field, (lower_x - map.center_x)*map.res, (lower_y-map.center_y)*map.res
-
-def gaussian_kernal_2d(size, sigma):
-    xx = np.arange(-size,size+1,1)
-    yy = np.arange(-size,size+1,1)
-    x_grid, y_grid = np.meshgrid(xx,yy)
-    kernal = np.exp(-(x_grid**2 + y_grid**2)/(2*sigma**2))/(2*np.pi*sigma**2)
-    return kernal
-
-def rot_matrix_2d(theta):
-    cos_theta = np.cos(theta)
-    sin_theta = np.sin(theta)
-    r = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
-    return r
-
-def test():
-    num_beams = 36
-    scan = ScanMatcher()
-    map = SLAM_map()
-
-
-    meas = []
-    rays = []
-    for i in range(num_beams):
-        dist = np.random.uniform(0, 4)
-        bearing = np.random.uniform(-np.pi, np.pi)
-        meas.append(dist)
-        ray = np.array([np.sin(bearing), np.cos(bearing)])
-        rays.append(ray / np.linalg.norm(ray))
-    pose = np.array([0, 0, 0])
-    map.integrate_scan(pose,meas,rays)
-    rays = np.array(rays).transpose()
-    pose = np.array([0,1,0])
-    start = time.time()
-    matched_pose = scan.scan_match(rays,meas,pose,map)
-    end = time.time()
-
-    print("Time: {:.6f}".format(end-start))
-    print("Mathced Pose:",matched_pose)
-if __name__ == "__main__":
-    test()
