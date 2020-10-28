@@ -14,7 +14,7 @@ class DroneSwarm(CommunicationNode):
             ma, mi = d.get_sensor_limits()
             max_ranges.append(ma)
             min_ranges.append(mi)
-        self.max_ragnes = np.concatenate(max_ranges)
+        self.max_ranges = np.concatenate(max_ranges)
         self.min_ranges = np.concatenate(min_ranges)
 
     def read_range_sensors(self, environment):
@@ -23,9 +23,10 @@ class DroneSwarm(CommunicationNode):
         orgins = orgins.transpose()
         t_min = np.ones(rays.shape[0]) * np.inf
         for obs in environment.get_obstacles():
-            t = multi_ray_intersect_triangle(orgins, rays, obs.points, 4)
+            t = multi_ray_intersect_triangle(orgins, rays, obs.points, np.max(self.max_ranges))
             t_min = np.minimum(t_min, t)
         t_min[t_min < self.min_ranges] = self.min_ranges[t_min<self.min_ranges]
+        t_min[t_min > self.max_ranges] = np.inf
         for d in self.drones:
             local_readings = t_min[idx_drones[d.id]["start"]:idx_drones[d.id]["end"]]
             for i, idx in enumerate(d.get_sensor_idx()):

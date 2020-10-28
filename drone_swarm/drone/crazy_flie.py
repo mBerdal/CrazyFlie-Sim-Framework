@@ -124,7 +124,7 @@ class CrazyFlieLidar(Drone):
 
     self.command = np.zeros([6, 1])
 
-    acc_limits_upper_std = np.array([1, 1, 1, np.deg2rad(10), np.deg2rad(10), np.deg2rad(10)]).reshape(6, 1)
+    acc_limits_upper_std = np.array([1, 1, 1, np.deg2rad(270), np.deg2rad(270), np.deg2rad(270)]).reshape(6, 1)
     acc_limits_lower_std = -acc_limits_upper_std
 
     self.acc_limits_lower = kwargs.get("acc_limits_lower", acc_limits_lower_std)
@@ -190,7 +190,7 @@ class CrazyFlieLidar(Drone):
 
   @staticmethod
   def init_plot(axis, state, **kwargs):
-    c = Circle(state[0:2], radius=0.02, color="green")
+    c = Circle(state[0:2], radius=0.1, color="green")
     axis.add_patch(c)
     return c
 
@@ -202,9 +202,9 @@ class CrazyFlieLidar(Drone):
 
 
 def unwrap(angles):
-  angles[0] = angles[0] % 2*pi if angles[0] > 2*pi or angles[0] < 0 else angles[0]
-  angles[1] = angles[1] % 2*pi if angles[1] > 2*pi or angles[1] < 0 else angles[1]
-  angles[2] = angles[2] % 2*pi if angles[2] > 2*pi or angles[2] < 0 else angles[2]
+  angles[0] = angles[0] % (2*pi) if angles[0] > 2*pi or angles[0] < 0 else angles[0]
+  angles[1] = angles[1] % (2*pi) if angles[1] > 2*pi or angles[1] < 0 else angles[1]
+  angles[2] = angles[2] % (2*pi) if angles[2] > 2*pi or angles[2] < 0 else angles[2]
   return angles
 
 def clip(array, lower_bound, upper_bound):
