@@ -85,7 +85,7 @@ class CrazyFlie(Drone):
     self.state[3:6] = unwrap(self.state[3:6] + step_length * (T @ self.state_dot[3:6]))
 
   def update_state_dot(self, step_length):
-    self.state_dot = self.state_dot + step_length*clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)
+    self.state_dot = self.state_dot + step_length*clip(self.command,self.acc_limits_lower,self.acc_limits_upper)
 
   def read_sensors(self, environment, vector_format=True):
     readings = []
@@ -124,7 +124,7 @@ class CrazyFlieLidar(Drone):
 
     self.command = np.zeros([6, 1])
 
-    acc_limits_upper_std = np.array([1, 1, 1, np.deg2rad(270), np.deg2rad(270), np.deg2rad(270)]).reshape(6, 1)
+    acc_limits_upper_std = np.array([2, 2, 2, np.deg2rad(270), np.deg2rad(270), np.deg2rad(270)]).reshape(6, 1)
     acc_limits_lower_std = -acc_limits_upper_std
 
     self.acc_limits_lower = kwargs.get("acc_limits_lower", acc_limits_lower_std)
@@ -176,7 +176,7 @@ class CrazyFlieLidar(Drone):
     self.state[3:6] = unwrap(self.state[3:6] + step_length * (T @ self.state_dot[3:6]))
 
   def update_state_dot(self, step_length):
-    self.state_dot = self.state_dot + step_length*clip(self.command-self.state_dot,self.acc_limits_lower,self.acc_limits_upper)
+    self.state_dot = self.state_dot + step_length*clip(self.command,self.acc_limits_lower,self.acc_limits_upper)
 
   def read_sensors(self, environment, vector_format=True):
     readings = []
