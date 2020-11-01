@@ -1,11 +1,17 @@
 import numpy as np
 from slam.particle import Particle
+from logger.loggable import Loggable
+from logger.log_entry import LogEntry
 import matplotlib.pyplot as plt
-import copy
-import time
-class Grid_SLAM():
 
-    def __init__(self, num_particles,initial_pose,rays,particle_params={},map_params={},scan_match_params={},obs_params={}, odometry_params={},**kwargs):
+from inspect import getmodule
+from copy import deepcopy
+
+
+class GridSLAM(Loggable):
+
+    def __init__(self, id, num_particles,initial_pose,rays,particle_params={},map_params={},scan_match_params={},obs_params={}, odometry_params={},**kwargs):
+        self.id = id
         self.num_particles = num_particles
         self.particle_params = particle_params
         self.particles = []
@@ -15,16 +21,16 @@ class Grid_SLAM():
         self.weights = np.array([1/num_particles for i in range(num_particles)])
         self.best_particle = 0
         self.n_eff = 1/np.sum(self.weights**2)
-        self.threshold_resampling = kwargs.get("threshold_resampling", self.num_particles / 2)
-
+        self.threshold_resampling = kwargs.get("threshold_resampling", 2)
+        self.counter = 0
 
     def update_particles(self, measurements, odometry):
         for p in self.particles:
             p.update_particle(measurements,odometry)
         self.normalize_weights()
-        print(self.n_eff)
         if self.n_eff < self.threshold_resampling:
             self.resample_particles()
+        self.counter += 1
 
     def normalize_weights(self):
         for i in range(self.num_particles):
@@ -36,7 +42,6 @@ class Grid_SLAM():
             self.particles[i].update_weight(self.weights[i])
 
     def resample_particles(self):
-        print("Resampling particles")
         cum_weights = np.cumsum(self.weights)
         new_particles = []
         for i in range(self.num_particles):
@@ -50,10 +55,13 @@ class Grid_SLAM():
         self.weights[:] = 1/self.num_particles
 
     def get_best_map(self):
-        return self.particles[self.best_particle].map
+        return deepcopy(self.particles[self.best_particle].map)
 
     def get_best_particle(self):
-        return self.particles[self.best_particle]
+        return deepcopy(self.particles[self.best_particle])
+
+    def get_best_pose(self):
+        return deepcopy(self.particles[self.best_particle].pose)
 
     def init_plot(self,axes):
         objects = self.particles[self.best_particle].init_plot(axes)
@@ -63,3 +71,29 @@ class Grid_SLAM():
         objects = self.particles[self.best_particle].update_plot(objs)
         return objects
 
+    def visualize(self):
+        self.particles[self.best_particle].visualize()
+
+    def get_time_entry(self):
+        return LogEntry(
+            pose=self.get_best_pose().copy(),
+            map=self.get_best_map().convert_grid_to_prob(),
+            id=self.id,
+            counter=self.counter
+        )
+
+    def generate_time_entry(self):
+        return LogEntry(
+            pose=self.get_best_pose().copy(),
+            map=self.get_best_map().convert_grid_to_prob(),
+            id=self.id
+        )
+
+    def get_info_entry(self):
+        return LogEntry(
+            module=getmodule(self).__name__,
+            cls=type(self).__name__,
+            num_particles=self.num_particles,
+            id=self.id,
+            map_res=self.get_best_map().res
+        )

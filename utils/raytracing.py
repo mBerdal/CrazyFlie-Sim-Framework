@@ -25,6 +25,7 @@ def intersect_rectangle(rectangle: np.ndarray, ray_orgin: np.ndarray, ray_vector
     else:
         return tri1
 
+
 def multi_intersect_rectangle(rectangle, ray_orgins, ray_vectors, max_range):
     tri1 = multi_ray_intersect_triangle(ray_orgins, ray_vectors, rectangle[:, 0:3], max_range)
     tm = np.any(tri1==np.inf,axis=1)
@@ -36,10 +37,9 @@ def multi_intersect_rectangle(rectangle, ray_orgins, ray_vectors, max_range):
     return tri1
 
 
+def ray_intersect_triangle(ray_origin: np.ndarray, ray_vector: np.ndarray, triangle:np.ndarray, max_range: float):
 
-def ray_intersect_triangle(ray_orgin: np.ndarray,ray_vector: np.ndarray, triangle:np.ndarray, max_range: float):
-
-    ray_orgin = ray_orgin.ravel()
+    ray_origin = ray_origin.ravel()
     ray_vector = ray_vector.ravel()
     eps = 1e-6
     vertex0 = triangle[:,0]
@@ -51,24 +51,24 @@ def ray_intersect_triangle(ray_orgin: np.ndarray,ray_vector: np.ndarray, triangl
     h = cross_product(ray_vector,edge2)
     a = edge1.dot(h)
 
-    if (a > -eps and a < eps):
+    if -eps < a < eps:
         return np.inf*np.ones((3,1))
 
     f = 1.0/a
-    s = ray_orgin - vertex0
+    s = ray_origin - vertex0
 
     u = f*s.dot(h)
 
-    if (u < 0.0 or u > 1.0):
+    if u < 0.0 or u > 1.0:
         return np.inf*np.ones((3,1))
 
     q = cross_product(s,edge1)
     v = f*ray_vector.dot(q)
-    if (v < 0.0 or u + v > 1.0):
+    if v < 0.0 or u + v > 1.0:
         return np.inf*np.ones((3,1))
 
     t = f * edge2.dot(q)
-    if t > eps and t < max_range:
+    if eps < t < max_range:
         return (ray_vector*t).reshape(3,1)
     else:
         return np.inf*np.ones((3,1))
@@ -97,8 +97,8 @@ def multi_ray_intersect_triangle(ray_orgins, ray_vectors,triangle, max_range,ret
 
     u = f*np.einsum('ij,ij->i', s, h)
 
-    tm1 = u<0.0
-    tm2 = u>1.0
+    tm1 = u < 0.0
+    tm2 = u > 1.0
     tm = tm1 | tm2
     truth_array[tm] = True
 

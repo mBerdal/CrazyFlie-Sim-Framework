@@ -20,18 +20,24 @@ class Particle():
         self.motion_model = OdometryModel(**odometry_params)
         self.observation_model = ObservationModel(self.ray_vectors, **obs_params)
 
-        self.num_samples = kwargs.get("num_samples", 20)
+        self.num_samples = kwargs.get("num_samples", 40)
         self.eps = kwargs.get("eps",np.array([0.1,0.1,0.05]).reshape(3,1))
 
         self.map_params = map_params
         self.scan_match_params = scan_match_params
         self.odometry_params = odometry_params
         self.obs_params = obs_params
-        self.min_diff = kwargs.get("min_diff",2.0)
+        self.min_diff = kwargs.get("min_diff",2000.0)
+        self.first = True
 
     def update_particle(self, measurements, odometry):
         odometry_pose = self.odometry_update(odometry)
-        scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
+        if not self.first:
+            scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
+            self.first = False
+        else:
+            scan_pose = odometry_pose
+            score = 0
 
         if score < self.min_diff:
             scan_pose = odometry_pose
@@ -96,13 +102,9 @@ class Particle():
         diff[0:2] = (odometry[0, 0:2] - odometry[1, 0:2]).reshape(2,1)
         diff[2] = ssa(odometry[0,2],odometry[1,2])
         pose = np.zeros([3,1])
-        """
-        pose[0] = self.pose[0] + odometry[0]*np.cos(odometry[2]) - odometry[1]*np.sin(odometry[2])
-        pose[1] = self.pose[1] + odometry[0]*np.sin(odometry[2]) + odometry[1]*np.cos(odometry[2])
-        pose[2] = (self.pose[2] + odometry[2]) % (2*np.pi)
-        """
-        pose[0] = self.pose[0] + diff[0]
-        pose[1] = self.pose[1] + diff[1]
+
+        pose[0] = self.pose[0] + diff[0]*np.cos(self.pose[2]) - diff[1]*np.sin(self.pose[2])
+        pose[1] = self.pose[1] + diff[0]*np.sin(self.pose[2]) + diff[1]*np.cos(self.pose[2])
         pose[2] = (self.pose[2] + diff[2]) % (2*np.pi)
         return pose
 
@@ -123,6 +125,14 @@ class Particle():
         objects["map"] = self.map.update_plot(objects["map"])
         objects["drone"].set_center((self.pose[0], self.pose[1]))
         return objects
+
+    def visualize(self):
+        plt.figure()
+        plt.imshow(self.map.convert_grid_to_prob().transpose(),"Greys",origin="lower",
+                   extent=[-self.map.size_x/2*self.map.res,self.map.size_x/2*self.map.res,-self.map.size_y/2*self.map.res,self.map.size_y/2*self.map.res])
+        plt.plot(self.pose[0], self.pose[1], "o", color="red",markersize=2)
+        plt.show()
+
 
 def diff_covariance(sample,mean):
     diff = np.zeros([3,1])

@@ -3,16 +3,16 @@ import matplotlib.pyplot as plt
 from logger.logger import Logger
 from sensor.lidar_sensor import LidarSensor
 from matplotlib.animation import FuncAnimation
-from slam.map import SLAM_map, Map_Multi_Robot
+from slam.map import SLAM_map, MapMultiRobot
 from matplotlib import animation
-from slam.grid_slam import Grid_SLAM
+from slam.gridslam import GridSLAM
 from utils.rotation_utils import ssa
 from scipy.stats import norm
 #np.random.seed(1)
 
-file = "test_lidar_test.json"
+file = "test_lidar_new.json"
 num_particles = 5
-drone_ids = ["0","1"]
+drone_ids = ["0"]
 steps = 500
 
 
@@ -72,8 +72,8 @@ def test_multi_slam(file, drone_ids,num_particles,steps,slam_params, map_params,
         s = LidarSensor(info["sensor_specs"].sensor_pos_bdy, info["sensor_specs"].sensor_attitude_bdy, num_rays=144)
         rays = s.ray_vectors
         drone_info[id] = info
-        slams[id] = Grid_SLAM(num_particles,initial_pose,rays,map_params=map_params,scan_match_params=scan_params,
-                     obs_params=obs_params,odometry_params=odometry_params,particle_params=particle_params,**slam_params)
+        slams[id] = GridSLAM(0,num_particles, initial_pose, rays, map_params=map_params, scan_match_params=scan_params,
+                             obs_params=obs_params, odometry_params=odometry_params, particle_params=particle_params, **slam_params)
         prev_state[id] = info["states"][0][[0,1,5]]
         prev_time[id] = 0
         slam_log[id] = list()
@@ -83,7 +83,7 @@ def test_multi_slam(file, drone_ids,num_particles,steps,slam_params, map_params,
 
     poses = [initial_pose_1,initial_pose_2]
     maps = [slams[id].particles[0].map for id in drone_ids]
-    common_map = Map_Multi_Robot(maps,poses)
+    common_map = MapMultiRobot(maps, poses)
     plot_init = False
     for i in range(steps):
         print("Step:", i)

@@ -13,10 +13,10 @@ from sensor.lidar_sensor import LidarSensor
 class ScanMatcher():
 
     def __init__(self, **kwargs):
-        self.max_sensor_range = kwargs.get("max_sensor_range",4)
+        self.max_sensor_range = kwargs.get("max_sensor_range",10)
         self.padding_dist = 2.0
 
-        self.sigma = kwargs.get("sigma",0.5)
+        self.sigma = kwargs.get("sigma",0.3)
         self.p_unknown = 0.3
 
         self.initial_step = kwargs.get("step",1)
@@ -106,6 +106,12 @@ class ScanMatcher():
 
         upper_x = np.int(np.floor((initial_pose[0] + self.max_sensor_range + self.padding_dist) / map.res)) + map.center_x + 1
         upper_y = np.int(np.floor((initial_pose[1] + self.max_sensor_range + self.padding_dist) / map.res)) + map.center_y + 1
+
+        lower_x = max([lower_x, 0])
+        lower_y = max([lower_y, 0])
+
+        upper_x = min([upper_x, map.size_x])
+        upper_y = min([upper_y, map.size_y])
 
         prob_field = map.log_prob_map[lower_x:upper_x, lower_y:upper_y].copy()
 

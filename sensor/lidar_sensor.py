@@ -35,10 +35,10 @@ class LidarSensor(Sensor):
             sensor_attitude_bdy=self.sensor_attitude_bdy
         )
 
-    def get_reading(self) -> float:
-        return self.measurement + self.noise_generator()
+    def get_reading(self):
+        return {"type": type(self), "reading": self.measurement + self.noise_generator()}
 
-    def add_measurement(self,measurements):
+    def add_measurement(self, measurements):
         self.measurement = measurements
 
     def get_ray_vectors(self):

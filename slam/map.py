@@ -122,6 +122,7 @@ class SLAM_map():
         im = axis.imshow(self.convert_grid_to_prob().transpose(),"Greys",origin="lower",
                    extent=[-self.size_x/2*self.res,self.size_x/2*self.res,-self.size_y/2*self.res,self.size_y/2*self.res])
         return im
+
     def update_plot(self, im):
         im.set_data(self.convert_grid_to_prob().transpose())
         return im
@@ -131,7 +132,7 @@ class SLAM_map():
         m.log_prob_map = copy.deepcopy(self.log_prob_map)
         return m
 
-class Map_Multi_Robot():
+class MapMultiRobot():
     def __init__(self,maps,initial_poses):
         self.maps = maps
         self.res = maps[0].res
@@ -242,7 +243,7 @@ def test():
     map2.log_prob_map = np.random.rand(map2.size_x,map2.size_y) + 2
     maps = [map1,map2]
     initial_poses = [np.array([0,0,0]),np.array([1,-10,0])]
-    merge_map = Map_Multi_Robot(maps,initial_poses)
+    merge_map = MapMultiRobot(maps, initial_poses)
     merge_map.merge_map(maps)
     plt.figure()
     plt.imshow(merge_map.merged_map.transpose(),origin="lower")

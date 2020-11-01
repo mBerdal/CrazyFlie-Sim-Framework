@@ -32,22 +32,22 @@ class OdometryModel(ProbModel):
         self.alpha4 = kwargs.get("alpha4", 0.25)
 
     def likelihood(self,new_pose, prev_pose, u):
-        od_prev = u[0,:]
-        od_new = u[1,:]
+        od_prev = u[1,:]
+        od_new = u[0,:]
 
         delta_rot1_od = ssa(np.arctan2(od_new[1]-od_prev[1],od_new[0]-od_new[0]),od_prev[2])
-        delta_trans_od = np.linalg.norm(od_prev[0:1]-od_new[0:1])
+        delta_trans_od = np.linalg.norm(od_prev[0:2]-od_new[0:2])
         delta_rot2_od = ssa(od_new[2],(od_prev[2]-delta_rot1_od)%(2*np.pi))
 
         delta_rot1_pose = ssa(np.arctan2(new_pose[1] - prev_pose[1], new_pose[0] - prev_pose[0]),prev_pose[2])
-        delta_trans_pose = np.linalg.norm(prev_pose[0:1] - new_pose[0:1])
+        delta_trans_pose = np.linalg.norm(prev_pose[0:2] - new_pose[0:2])
         delta_rot2_pose = ssa(new_pose[2], (prev_pose[2] - delta_rot1_pose)%(2*np.pi))
 
-        std1 = self.alpha1*delta_rot1_od**2+ self.alpha2*delta_trans_od**2
+        std1 = self.alpha1*delta_rot1_od**2+ self.alpha2*delta_trans_od**2 + 1e-2
         err1 = ssa(delta_rot1_pose,delta_rot1_od)
         p1 = norm.pdf(err1,scale=std1)
 
-        std2 = self.alpha3*delta_trans_od**2+self.alpha4*(delta_rot1_od**2 + delta_rot2_od**2)
+        std2 = self.alpha3*delta_trans_od**2+self.alpha4*(delta_rot1_od**2 + delta_rot2_od**2) + 1e-2
         err2 = delta_trans_pose-delta_trans_od
         p2 = norm.pdf(err2,scale=std2)
 
@@ -133,6 +133,12 @@ class ObservationModel:
         upper_y = np.int(
             np.floor((initial_pose[1] + self.max_sensor_range + self.padding_dist) / map.res)) + map.center_y + 1
 
+        lower_x = max([lower_x, 0])
+        lower_y = max([lower_y, 0])
+
+        upper_x = min([upper_x, map.size_x])
+        upper_y = min([upper_y, map.size_y])
+
         prob_field = map.log_prob_map[lower_x:upper_x, lower_y:upper_y].copy()
 
         binary_field = prob_field > np.log(self.occ_threshold / (1 - self.occ_threshold))
@@ -160,7 +166,7 @@ def visualize_observations(pose, rays, meas, map, likelihood):
     rays = rot_matrix_2d(pose[2].squeeze()) @ rays[0:2,:]
     fig, ax = plt.subplots(1)
     ax.imshow(likelihood.transpose(), origin="lower")
-    drone = plt.Circle([pose[0],pose[1]],radius=3)
+    drone = plt.Circle([pose[0], pose[1]],radius=3)
     drone_coord_x= pose[0]/map.res + map.center_x
     drone_coord_y= pose[1]/map.res + map.center_y
     ax.add_patch(drone)
