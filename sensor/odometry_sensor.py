@@ -7,7 +7,7 @@ from utils.rotation_utils import rot_matrix_2d
 
 class OdometrySensor(Sensor):
 
-    def __init__(self, noise_generator=lambda: np.random.normal(scale=0.1,size=[3,1]),**kwargs):
+    def __init__(self, noise_generator=lambda: noise_odometry(),**kwargs):
         super().__init__(noise_generator)
         self.measurement = np.zeros([3,1])
 
@@ -24,3 +24,10 @@ class OdometrySensor(Sensor):
             module=getmodule(self).__name__,
             cls=type(self).__name__
         )
+
+def noise_odometry():
+    n = np.zeros([3,1])
+    n[0] = np.random.normal(scale=0.2)
+    n[1] = np.random.normal(scale=0.2)
+    n[2] = np.random.normal(scale=0.03)
+    return n

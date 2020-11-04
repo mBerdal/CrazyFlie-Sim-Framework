@@ -62,7 +62,7 @@ class Slammer(Loggable):
             if update_flag:
                 print("Updating SLAM")
                 odometry = np.concatenate([odometry_data.reshape(1, 3), self.prev_odometry.reshape(1,3)], axis=0)
-                self.slam.update_particles(lidar_data,odometry)
+                self.slam.update_particles_mp(lidar_data,odometry)
 
                 self.reset_time_counter()
                 self.prev_odometry = odometry_data.copy()
@@ -80,7 +80,10 @@ class Slammer(Loggable):
     def get_pose(self):
         return self.slam.get_best_pose()
 
-    def get_occupancy_grid(self,radius):
+    def get_trajectory(self):
+        return self.slam.get_trajectory()
+
+    def get_occupancy_grid(self, radius):
         pose = self.get_pose()
         map = self.get_map()
         lower_x = np.int(
@@ -132,19 +135,11 @@ class Slammer(Loggable):
         return self.slam.generate_time_entry()
 
     def visualize(self):
-      self.slam.visualize()
+        self.slam.visualize()
 
-def noise_odometry(prev, new):
-    #delta_rot= ssa(np.arctan2(new[1] - prev[1], new[0] - prev[0]), new[2])
-    delta_rot = ssa(new[2],prev[2])+0.01
-    delta_trans_x = np.abs(new[0]-prev[0])+0.01
-    delta_trans_y = np.abs(new[1]-prev[1])+0.01
-    alpha1 = 0.5
-    alpha2 = 0.5
-    diff_x = norm.rvs(scale=alpha1*delta_trans_x**2)
-    new[0] = new[0] + diff_x
-    diff_y = norm.rvs(scale=alpha1*delta_trans_y**2)
-    new[1] = new[1] + diff_y
-    diff_rot = norm.rvs(scale=alpha2*delta_rot ** 2)
-    new[2] = (new[2] + diff_rot) % (2*np.pi)
-    return new
+    def init_plot(self,axes):
+        obj = self.slam.init_plot(axes)
+        return obj
+
+    def update_plot(self, objects):
+        return self.slam.update_plot(objects)

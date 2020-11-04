@@ -1,4 +1,5 @@
 import numpy as np
+import multiprocessing as mp
 from slam.particle import Particle
 from logger.loggable import Loggable
 from logger.log_entry import LogEntry
@@ -27,6 +28,23 @@ class GridSLAM(Loggable):
     def update_particles(self, measurements, odometry):
         for p in self.particles:
             p.update_particle(measurements,odometry)
+        self.normalize_weights()
+        if self.n_eff < self.threshold_resampling:
+            self.resample_particles()
+        self.counter += 1
+
+    def update_particles_mp(self, measurements, odometry):
+        #meas = [measurements.copy() for i in range(self.num_particles)]
+        #odo= [odometry.copy() for i in range(self.num_particles)]
+        process = []
+        q = mp.Queue()
+        for p in self.particles:
+            pro = mp.Process(target=p.update_particle, args=(measurements.copy(),odometry.copy(),q))
+            pro.start()
+            process.append(pro)
+        a = [q.get() for _ in process]
+        [x.join() for x in process]
+        self.particles = a
         self.normalize_weights()
         if self.n_eff < self.threshold_resampling:
             self.resample_particles()
@@ -63,6 +81,9 @@ class GridSLAM(Loggable):
     def get_best_pose(self):
         return deepcopy(self.particles[self.best_particle].pose)
 
+    def get_trajectory(self):
+        return deepcopy(self.particles[self.best_particle].trajectory)
+
     def init_plot(self,axes):
         objects = self.particles[self.best_particle].init_plot(axes)
         return objects
@@ -95,5 +116,7 @@ class GridSLAM(Loggable):
             cls=type(self).__name__,
             num_particles=self.num_particles,
             id=self.id,
-            map_res=self.get_best_map().res
+            map_res=self.get_best_map().res,
+            map_size_x=self.get_best_map().size_x,
+            map_size_y=self.get_best_map().size_y
         )

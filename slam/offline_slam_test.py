@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from logger.logger import Logger
 from sensor.lidar_sensor import LidarSensor
 from matplotlib.animation import FuncAnimation
-from slam.map import SLAM_map, MapMultiRobot
+from slam.map import SLAM_map
 from matplotlib import animation
 from slam.gridslam import GridSLAM
 from utils.rotation_utils import ssa
@@ -139,7 +139,6 @@ def test_multi_slam(file, drone_ids,num_particles,steps,slam_params, map_params,
                         objects[id] = slams[id].update_plot(objects[id])
                     else:
                         objects[id] = common_map.update_plot(objects[id])
-
             for id in fig_ids:
                 figs[id].canvas.draw()
             plt.pause(0.1)

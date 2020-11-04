@@ -13,19 +13,19 @@ class PredicativeCollisionAvoidance:
         self.weight_heading_command = 3
 
         self.heading = np.pi
-        self.heading_num = 11
+        self.heading_num = 13
         self.heading_commands = np.linspace(-self.heading,self.heading,self.heading_num)
 
         self.velocity_commands = [0.5, 1]
 
         self.time_step_simulation = 0.1
-        self.time_horizon = 3
+        self.time_horizon = 4
 
         self.heading_delta_max = np.deg2rad(180)
         self.vel_delta_max = 2
 
-        self.eps = 1e-6
-        self.delta_pos = 0.5
+        self.eps = 1e-50
+        self.delta_pos = 1.5
 
     def collision_avoidance(self, pose, velocity, distance_grid, waypoint):
         scores = np.zeros([len(self.velocity_commands),len(self.heading_commands)])

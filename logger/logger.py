@@ -23,7 +23,7 @@ class Logger():
     def __init__(self, drones=[], environment=None, controller=None):
         self.log = {"environment": environment, "drones": {}, "controller": {}}
         self.__log_info(drones)
-        #self.__log_info_controller(controller)
+        self.__log_info_controller(controller)
 
     def load_from_file(self, filename: str = ""):
         try:

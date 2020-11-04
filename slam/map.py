@@ -8,6 +8,7 @@ from sensor.lidar_sensor import LidarSensor
 from matplotlib.animation import FuncAnimation
 from matplotlib import animation
 from utils.rotation_utils import rot_matrix_2d
+from queue import Queue
 
 class SLAM_map():
     """
@@ -31,7 +32,7 @@ class SLAM_map():
 
         self.max_range = kwargs.get("max_range",10)
 
-        self.p_free = kwargs.get("p_free",0.3)
+        self.p_free = kwargs.get("p_free",0.4)
         self.p_occupied = kwargs.get("p_occupied",0.7)
         self.p_prior = kwargs.get("p_prior",0.5)
         self.log_free = np.log(self.p_free / (1 - self.p_free))
@@ -41,7 +42,7 @@ class SLAM_map():
         self.center_x = np.int(self.size_x/2)
         self.center_y = np.int(self.size_y/2)
 
-        self.log_prob_map = np.ones((self.size_x, self.size_y))*self.log_prior
+        self.log_prob_map = np.ones((self.size_x, self.size_y),dtype=np.float32)*self.log_prior
 
     def integrate_scan(self, pose, measurments, ray_vectors):
         ray_vectors = rot_matrix_2d(pose[2]) @ ray_vectors[0:2,:]
@@ -125,6 +126,7 @@ class SLAM_map():
 
     def update_plot(self, im):
         im.set_data(self.convert_grid_to_prob().transpose())
+        im.autoscale()
         return im
 
     def __deepcopy__(self, memodict={}):
@@ -132,106 +134,7 @@ class SLAM_map():
         m.log_prob_map = copy.deepcopy(self.log_prob_map)
         return m
 
-class MapMultiRobot():
-    def __init__(self,maps,initial_poses):
-        self.maps = maps
-        self.res = maps[0].res
-        self.initial_poses = initial_poses
-        self.delta_x = []
-        self.delta_y = []
-        self.base_pose = initial_poses[0]
 
-        self.size_x = []
-        self.size_y = []
-
-
-        for i in range(len(maps)):
-            self.delta_x.append(np.int(np.floor((initial_poses[i][0]-self.base_pose[0])/self.res)))
-            self.delta_y.append(np.int(np.floor((initial_poses[i][1]-self.base_pose[1])/self.res)))
-
-            self.size_x.append(maps[i].size_x)
-            self.size_y.append(maps[i].size_y)
-
-        self.max_delta_x = max(self.delta_x)
-        self.min_delta_x = min(self.delta_x)
-        self.max_delta_y = max(self.delta_y)
-        self.min_delta_y = min(self.delta_y)
-
-        self.delta_x = [x - self.min_delta_x for x in self.delta_x]
-        self.delta_y = [y - self.min_delta_y for y in self.delta_y]
-
-        self.start_x = []
-        self.start_y = []
-        self.end_x = []
-        self.end_y = []
-
-        for i in range(len(maps)):
-            self.start_x.append(self.delta_x[i])
-            self.start_y.append(self.delta_y[i])
-            self.end_x.append(self.delta_x[i]+self.size_x[i])
-            self.end_y.append(self.delta_y[i]+self.size_y[i])
-
-        self.size_x_merged = max(self.end_x)
-        self.size_y_merged = max(self.end_y)
-
-        self.merged_map = np.zeros([self.size_x_merged,self.size_y_merged])
-
-    def merge_map(self,maps):
-        self.merged_map = np.zeros([self.size_x_merged,self.size_y_merged])
-        for i in range(len(maps)):
-            if maps[i] == None:
-                continue
-            self.merged_map[self.start_x[i]:self.end_x[i],self.start_y[i]:self.end_y[i]] += maps[i].log_prob_map
-        return self.merged_map
-
-    def convert_grid_to_prob(self):
-        exp_grid = np.exp(self.merged_map)
-        return exp_grid/(1+exp_grid)
-
-    def init_plot(self, axis):
-        im = axis.imshow(self.convert_grid_to_prob().transpose(), "Greys", origin="lower",
-                         extent=[-self.size_x_merged / 2 * self.res, self.size_x_merged / 2 * self.res, -self.size_y_merged / 2 * self.res,
-                                 self.size_y_merged / 2 * self.res])
-        return im
-
-    def update_plot(self, im):
-        im.set_data(self.convert_grid_to_prob().transpose())
-        return im
-
-
-
-
-def merge_maps(map1,map2,initial_pose1, initial_pose2):
-    delta_x = initial_pose2[0] - initial_pose1[0]
-    delta_y = initial_pose2[1] - initial_pose1[1]
-    assert map1.res == map2.res
-    assert map1.size_x == map2.size_x
-
-    delta_x_cells = np.int(np.floor(delta_x/map1.res))
-    delta_y_cells = np.int(np.floor(delta_y/map1.res))
-
-    new_size_x = map1.size_x + abs(delta_x_cells)
-    new_size_y = map1.size_y + abs(delta_y_cells)
-
-    map = np.zeros([new_size_x,new_size_y])
-
-    if delta_x_cells < 0:
-        if delta_y_cells < 0:
-            map[abs(delta_x_cells):,abs(delta_y_cells):] = map1.log_prob_map
-            map[0:map2.size_x,0:map2.size_y] += map2.log_prob_map
-        else:
-            map[abs(delta_x_cells):,0:map1.size_y] = map1.log_prob_map
-            map[0:map2.size_x, abs(delta_y_cells):] += map2.log_prob_map
-    else:
-        if delta_y_cells < 0:
-            map[0:map1.size_x, abs(delta_y_cells):] = map1.log_prob_map
-            map[abs(delta_x_cells):, 0:map2.size_y] += map2.log_prob_map
-        else:
-            map[0:map1.size_x, abs(delta_y_cells):] = map1.log_prob_map
-            map[abs(delta_x_cells):, abs(delta_y_cells):] += map2.log_prob_map
-    map_full = SLAM_map(size_x=new_size_x,size_y=new_size_y,res=map1.res)
-    map_full.log_prob_map = map
-    return map_full
 
 
 

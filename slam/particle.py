@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import copy
 
 
-class Particle():
+class Particle:
 
     def __init__(self, initial_weight, initial_pose, ray_vectors, scan_match_params={}, map_params={}, odometry_params={}, obs_params={},**kwargs):
         self.weight = initial_weight
@@ -27,28 +27,24 @@ class Particle():
         self.scan_match_params = scan_match_params
         self.odometry_params = odometry_params
         self.obs_params = obs_params
-        self.min_diff = kwargs.get("min_diff",2000.0)
-        self.first = True
+        self.min_diff = kwargs.get("min_diff",2.0)
+        self.translation_sample = np.linspace(-0.05,0.05,5)
+        self.angular_sample = np.linspace(-np.deg2rad(3),np.deg2rad(3),5)
+        self.trajectory = [initial_pose.copy()]
+        self.counter = 0
 
-    def update_particle(self, measurements, odometry):
+    def update_particle(self, measurements, odometry, q):
         odometry_pose = self.odometry_update(odometry)
-        if not self.first:
-            scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
-            self.first = False
-        else:
-            scan_pose = odometry_pose
-            score = 0
-
-        if score < self.min_diff:
-            scan_pose = odometry_pose
-        #print("Odometry pose:", odometry_pose.tolist())
-        #print("Scan pose:", scan_pose.tolist())
+        scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
+        #if score < self.min_diff:
+        #    scan_pose = odometry_pose
         samples = []
-        for i in range(self.num_samples):
-            sample_pose = scan_pose + np.random.uniform(-self.eps,self.eps,self.eps.shape)
-            sample_pose[2] = sample_pose[2] % (2*np.pi)
-            samples.append(sample_pose)
-
+        for x in self.translation_sample:
+            for y in self.translation_sample:
+                for a in self.angular_sample:
+                    sample_pose = scan_pose + np.array([x,y,a]).reshape(3,1)
+                    sample_pose[2] = sample_pose[2] % (2 * np.pi)
+                    samples.append(sample_pose)
         mean = np.zeros([3,1])
         normalizer = 0
         n_obs = 0
@@ -88,11 +84,16 @@ class Particle():
         except:
             pose = scan_pose
             self.weight = 1e-200
+        if self.counter < 3:
+            self.counter += 1
+            pose[2] = 0
         pose[2] = pose[2] % (2*np.pi)
         self.pose = pose
         self.map.integrate_scan(pose, measurements, self.ray_vectors)
+        self.trajectory.append(self.pose.copy())
         #print("Motion:",n_mot)
         #print("Observation:",n_obs)
+        q.put(self)
 
     def update_weight(self, weight):
         self.weight = weight
@@ -113,17 +114,22 @@ class Particle():
                        scan_match_params=self.scan_match_params,map_params=self.map_params,
                        odometry_params=self.odometry_params,obs_params=self.obs_params,**kwargs)
         par.map = self.map.__deepcopy__()
+        par.trajectory = self.trajectory.copy()
+        par.counter = self.counter
         return par
 
     def init_plot(self, axis):
         im = self.map.init_plot(axis)
         d = plt.Circle((self.pose[0], self.pose[1]), radius=0.1, color="red")
         axis.add_patch(d)
-        return {"drone": d, "map": im}
+        t,  = axis.plot([t[0] for t in self.trajectory], [t[1] for t in self.trajectory], "-o", color="green", markersize=1)
+        return {"drone": d, "map": im, "trajectory": t}
 
     def update_plot(self,objects):
         objects["map"] = self.map.update_plot(objects["map"])
         objects["drone"].set_center((self.pose[0], self.pose[1]))
+        objects["trajectory"].set_xdata([t[0] for t in self.trajectory])
+        objects["trajectory"].set_ydata([t[1] for t in self.trajectory])
         return objects
 
     def visualize(self):
@@ -131,7 +137,8 @@ class Particle():
         plt.imshow(self.map.convert_grid_to_prob().transpose(),"Greys",origin="lower",
                    extent=[-self.map.size_x/2*self.map.res,self.map.size_x/2*self.map.res,-self.map.size_y/2*self.map.res,self.map.size_y/2*self.map.res])
         plt.plot(self.pose[0], self.pose[1], "o", color="red",markersize=2)
-        plt.show()
+        plt.plot([t[0] for t in self.trajectory], [t[1] for t in self.trajectory], "-o", color="blue", markersize=2)
+        plt.pause(0.1)
 
 
 def diff_covariance(sample,mean):
