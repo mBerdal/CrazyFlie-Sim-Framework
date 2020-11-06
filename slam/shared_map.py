@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from sensor.lidar_sensor import LidarSensor
 from queue import Queue
 
 class SharedMap():
     def __init__(self,base_id, maps, initial_poses):
-        self.min_frontier_length = 20
+        self.min_frontier_length = 10
         self.ids = maps.keys()
         self.base_id = base_id
         self.res = maps[base_id].res
@@ -54,7 +55,8 @@ class SharedMap():
         self.size_x_merged = max(self.end_x.values())
         self.size_y_merged = max(self.end_y.values())
 
-        self.merged_map = np.zeros([self.size_x_merged,self.size_y_merged])
+        self.log_prob_map = np.zeros([self.size_x_merged, self.size_y_merged])
+        self.occ_grid = np.zeros([self.size_x_merged,self.size_y_merged])
 
         self.merged_map_center_y = np.int(np.floor(self.size_x_merged/2))
         self.merged_map_center_x = np.int(np.floor(self.size_y_merged/2))
@@ -63,26 +65,29 @@ class SharedMap():
         self.center_y = self.base_center_y + self.delta_y[base_id]
 
         self.occ_threshold = np.log(0.7/(1-0.7))
+        self.free_threshold = np.log(0.2/(1-0.2))
+        self.rays = LidarSensor(np.array([0, 0, 0.1]), np.array([0, 0, 0]), num_rays=180).ray_vectors
+        self.max_range = 10
 
     def merge_map(self,maps):
-        self.merged_map = np.zeros([self.size_x_merged,self.size_y_merged])
+        self.log_prob_map = np.zeros([self.size_x_merged, self.size_y_merged])
         for i in maps.keys():
             if maps[i] is None:
                 continue
-            self.merged_map[self.start_x[i]:self.end_x[i],self.start_y[i]:self.end_y[i]] += maps[i].log_prob_map
-        return self.merged_map
+            self.log_prob_map[self.start_x[i]:self.end_x[i], self.start_y[i]:self.end_y[i]] += maps[i].log_prob_map
+        return self.log_prob_map
 
     def compute_frontiers(self):
-        cells = np.zeros(self.merged_map.shape)
-        cells[self.merged_map > self.occ_threshold] = -1
-        cells[self.merged_map == 0] = 1
+        cells = np.zeros(self.log_prob_map.shape)
+        cells[self.log_prob_map > self.occ_threshold] = -1
+        cells[self.log_prob_map == 0] = 1
 
         starting_cell = [self.center_x, self.center_y]
 
         q = Queue(0)
         q.put(starting_cell)
 
-        visited = np.zeros(self.merged_map.shape)
+        visited = np.zeros(self.log_prob_map.shape)
 
         frontiers = list()
 
@@ -147,21 +152,116 @@ class SharedMap():
             mean.append(np.mean(f,axis=1))
         return mean
 
-    def get_waypoint_exploration(self):
-        wps = {}
+    def get_waypoint_exploration(self, idle_drones, active_drones):
         points = self.compute_frontier_points()
-        points = np.random.permutation(points)
-        for ind, i in enumerate(self.ids):
-            wps[i] = self.compute_coordinate_local_map(i,points[ind])
-        return wps
+        information_gain = []
+        self.get_occupancy_grid()
+        for i in range(len(points)):
+            information_gain.append({"point": points[i], "observable_cells": self.calculate_observable_cells(points[i])})
+        assigned_cells = np.zeros(self.log_prob_map.shape)
+        for a in active_drones.keys():
+            observed = self.calculate_observable_cells(active_drones[a])
+            for c in observed:
+                assigned_cells[c[0],c[1]] = 1
+
+        def sort_func(e):
+            count = 0
+            for c in e["observable_cells"]:
+                if assigned_cells[c[0], c[1]] == 0:
+                    count += 1
+            return count
+
+        information_gain.sort(reverse=True,key=sort_func)
+        return information_gain
+
+    def calculate_observable_cells(self, pose):
+        observed = np.zeros(self.log_prob_map.shape)
+        unknowns = []
+        pose = pose[0:2].reshape(2,1)
+        for i in range(self.rays.shape[1]):
+            ray = self.rays[0:2,i].reshape(2,1)
+            end = pose[0:2] + self.max_range/self.res*ray
+            unknown_cells = self.grid_traversal(pose[0:2],end)
+            for c in unknown_cells:
+                if observed[c[0],c[1]] == 0:
+                    observed[c[0],c[1]] = 1
+                    unknowns.append(c)
+        return unknowns
+    
+    def distance
+    
+    def grid_traversal(self, start_point, end_point):
+        visited_cells = []
+        current_cell = self.get_cell(start_point)
+        last_cell = self.get_cell(end_point)
+        ray = (end_point - start_point)
+        ray = ray / np.linalg.norm(ray)
+
+        stepX = 1 if ray[0] >= 0 else -1
+        stepY = 1 if ray[1] >= 0 else -1
+
+        next_cell_boundary_x = (current_cell[0] + stepX)
+        next_cell_boundary_y = (current_cell[1] + stepY)
+
+        tmaxX = (next_cell_boundary_x - start_point[0]) / ray[0] if ray[0] != 0 else np.inf
+        tmaxY = (next_cell_boundary_y - start_point[1]) / ray[1] if ray[1] != 0 else np.inf
+
+        tdeltaX = 1 / ray[0] * stepX if ray[0] != 0 else np.inf
+        tdeltaY = 1 / ray[1] * stepY if ray[1] != 0 else np.inf
+
+        neg_ray = False
+        diff = np.zeros([2,1], np.int)
+
+        if current_cell[0] != last_cell[0] and ray[0] < 0:
+            diff[0] -= 1
+            neg_ray = True
+        if current_cell[1] != last_cell[1] and ray[1] < 0:
+            diff[1] -= 1
+            neg_ray = True
+        if neg_ray:
+            visited_cells.append(current_cell.copy())
+            current_cell += diff
+
+        while np.any(current_cell != last_cell):
+            if self.occ_grid[current_cell[0],current_cell[1]] == 0:
+                visited_cells.append(current_cell.copy())
+            if tmaxX <= tmaxY:
+                current_cell[0] += stepX
+                tmaxX += tdeltaX
+            else:
+                current_cell[1] += stepY
+                tmaxY += tdeltaY
+            try:
+                if self.occ_grid[current_cell[0],current_cell[1]] == -1:
+                    break
+            except IndexError:
+                return []
+        return visited_cells
+
+    def get_cell(self, point):
+        x = np.int(np.floor(point[0]))
+        y = np.int(np.floor(point[1]))
+        return np.array([x,y]).reshape(2,1)
 
     def compute_coordinate_local_map(self, id, coordinate):
         x = (np.floor(coordinate[0]) - self.center_x)*self.res - self.delta_poses[id][0]
         y = (np.floor(coordinate[1]) - self.center_y)*self.res - self.delta_poses[id][1]
         return np.array([x,y,0],np.float).reshape(3,1)
 
+    def get_occupancy_grid(self):
+        occ_grid = np.zeros(self.log_prob_map.shape)
+        occ_grid[self.log_prob_map > self.occ_threshold] = -1
+        occ_grid[self.log_prob_map < self.free_threshold] = 1
+        self.occ_grid = occ_grid
+        return occ_grid.copy()
+
+    def compute_cell(self, id, coord):
+        x = np.floor(coord[0]/self.res) + self.delta_x[id] + self.center_x
+        y = np.floor(coord[1]/self.res) + self.delta_y[id] + self.center_y
+        return np.array([x,y])
+
     def visualize_frontiers(self, frontiers):
-        f_cells = np.zeros(self.merged_map.shape)
+        f_cells = np.zeros(self.log_prob_map.shape)
         x = []
         y = []
         for f in frontiers:
@@ -176,8 +276,13 @@ class SharedMap():
         plt.pause(0.1)
 
     def convert_grid_to_prob(self):
-        exp_grid = np.exp(self.merged_map)
+        exp_grid = np.exp(self.log_prob_map)
         return exp_grid/(1+exp_grid)
+
+    def get_free_cells(self):
+        cells = np.where(self.log_prob_map < np.log(0.2 / (1 - 0.2)))
+        cells = np.concatenate([cells[0].reshape(-1,1),cells[1].reshape(-1,1)],axis=1)
+        return cells
 
     def init_plot(self, axis):
         im = axis.imshow(self.convert_grid_to_prob().transpose(), "Greys", origin="lower",

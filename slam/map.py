@@ -149,7 +149,7 @@ def test():
     merge_map = MapMultiRobot(maps, initial_poses)
     merge_map.merge_map(maps)
     plt.figure()
-    plt.imshow(merge_map.merged_map.transpose(),origin="lower")
+    plt.imshow(merge_map.log_prob_map.transpose(), origin="lower")
     plt.show()
 
 if __name__ == "__main__":

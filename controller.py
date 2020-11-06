@@ -8,6 +8,7 @@ from sensor.lidar_sensor import LidarSensor
 from sensor.odometry_sensor import OdometrySensor
 from logger.loggable import Loggable
 from logger.log_entry import LogEntry
+from slam.path_planning import RRT
 import matplotlib.pyplot as plt
 
 class Controller(ABC):
@@ -102,13 +103,13 @@ class DroneSLAMController(Controller, Loggable):
 
 class DroneController(Controller, Loggable):
 
-    def __init__(self, id, waypoints=[]):
+    def __init__(self, id):
         self.id = id
-        self.idle = True
+        self.state = "idle"
 
-        self.waypoints = waypoints
+        self.waypoints = []
         self.current_waypoint = 0
-        self.wp_dist = 1.5
+        self.wp_dist = 1
 
         self.heading_controller = HeadingControllerPD(0)
         self.velocity_controller = VelocityControllerPID(0)
@@ -123,9 +124,7 @@ class DroneController(Controller, Loggable):
         self.sat = {"heading": np.inf, "velocity": 1.5}
         self.velocity_gain = 1
 
-        self.estimated_heading = 0
-        self.estimated_x = 0
-        self.estimated_y = 0
+        self.estimated_pose = np.zeros([3,1])
         self.prev_odometry = np.zeros([3,1])
 
     def get_commands(self, slammer, states, sensor_data, time_step):
@@ -136,55 +135,67 @@ class DroneController(Controller, Loggable):
             if sd["type"] == OdometrySensor:
                 odometry_data = sd["reading"]
 
-        pose = slammer.get_pose()
+        if self.update_flag:
+            self.estimated_pose = slammer.get_pose()
+        else:
+            self.estimated_pose = self.odometry_update(odometry_data,self.prev_odometry)
 
-        wp = self.get_waypoint(pose)
+        wp = self.get_waypoint(self.estimated_pose)
 
-        if self.idle:
+        if self.state == "idle":
             self.velocity_controller.update_set_point(0)
 
-        if (self.time_counter >= self.time_rate_collision_avoidance or self.update_flag) and not self.idle:
-            err_x = wp[0] - pose[0]
-            err_y = wp[1] - pose[1]
+        elif self.state == "active":
+            update_avoidance = (self.time_counter >= self.time_rate_collision_avoidance or self.update_flag)
+            if update_avoidance:
+                err_x = wp[0] - self.estimated_pose[0]
+                err_y = wp[1] - self.estimated_pose[1]
 
-            dist_err = np.sqrt(err_x ** 2 + err_y ** 2)
-            velocity_d = np.clip(self.velocity_gain * dist_err, -self.sat["velocity"], self.sat["velocity"])
+                dist_err = np.sqrt(err_x ** 2 + err_y ** 2)
+                velocity_d = np.clip(self.velocity_gain * dist_err, -self.sat["velocity"], self.sat["velocity"])
 
-            distance_grid = slammer.get_occupancy_grid(np.ceil(velocity_d*5))
-            velocity = states[6]
+                distance_grid = slammer.get_occupancy_grid(np.ceil(velocity_d*5))
+                velocity = states[6]
 
-            self.avoid_controller.update_velocity_commands(np.array([0.5, 1]) * velocity_d)
+                self.avoid_controller.update_velocity_commands(np.array([0.5, 1]) * velocity_d)
 
-            heading_d, vel_d = self.avoid_controller.collision_avoidance(pose.copy(), velocity, distance_grid, wp)
+                heading_d, vel_d = self.avoid_controller.collision_avoidance(self.estimated_pose.copy(), velocity, distance_grid, wp)
 
-            self.heading_controller.update_set_point((heading_d + pose[2]) % (2*np.pi))
-            self.velocity_controller.update_set_point(vel_d)
+                self.heading_controller.update_set_point((heading_d + self.estimated_pose[2]) % (2*np.pi))
+                self.velocity_controller.update_set_point(vel_d)
 
-            self.reset_time_counter()
-            self.update_flag = False
-            self.estimated_heading = pose[2]
-        else:
-            self.estimated_heading += ssa(odometry_data[2],self.prev_odometry[2])
-            self.estimated_heading = self.estimated_heading % (2*np.pi)
+                self.reset_time_counter()
+                self.update_flag = False
 
         self.prev_odometry = odometry_data
 
-        r_output = self.heading_controller.get_control_action(self.estimated_heading, time_step)
+        r_output = self.heading_controller.get_control_action(self.estimated_pose[2], time_step)
         u_output = self.velocity_controller.get_control_action(states[6], time_step)
 
         command = np.array([u_output, 0, 0, 0, 0, r_output], dtype=np.float).reshape(6, 1)
         return command
 
+    def odometry_update(self, current, prev):
+        diff = np.zeros([3,1])
+        diff[0:2] = (current[0:2] - prev[0:2]).reshape(2,1)
+        diff[2] = ssa(current[2],prev[2])
+        pose = np.zeros([3,1])
+
+        pose[0] = self.estimated_pose[0] + diff[0]*np.cos(self.estimated_pose[2]) - diff[1]*np.sin(self.estimated_pose[2])
+        pose[1] = self.estimated_pose[1] + diff[0]*np.sin(self.estimated_pose[2]) + diff[1]*np.cos(self.estimated_pose[2])
+        pose[2] = (self.estimated_pose[2] + diff[2]) % (2*np.pi)
+        return pose
+
     def add_waypoints(self, waypoints):
         for w in waypoints:
             self.waypoints.append(w)
         self.update_flag = True
-        self.idle = False
+        self.state = "active"
 
     def reset_waypoints(self):
         self.waypoints = []
         self.current_waypoint = 0
-        self.idle = True
+        self.state = "idle"
 
     def toggle_update_flag(self, flag):
         self.update_flag = (flag or self.update_flag)
@@ -196,16 +207,18 @@ class DroneController(Controller, Loggable):
         self.time_counter = 0
 
     def get_waypoint(self, pose):
-        if not self.idle:
-            if np.linalg.norm(pose[0:2] - self.waypoints[self.current_waypoint][0:2]) < self.wp_dist:
-                if self.current_waypoint < len(self.waypoints) - 1:
-                    self.current_waypoint += 1
-                else:
-                    self.idle = True
+        if np.linalg.norm(pose[0:2] - self.waypoints[self.current_waypoint][0:2]) < self.wp_dist:
+            if self.current_waypoint < len(self.waypoints) - 1:
+                self.current_waypoint += 1
+            else:
+                self.state = "idle"
         return self.waypoints[self.current_waypoint]
 
     def get_assigned_wp(self):
         return self.waypoints[self.current_waypoint]
+
+    def get_end_wp(self):
+        return self.waypoints[len(self.waypoints)-1]
 
     def generate_time_entry(self):
         pass
@@ -361,52 +374,98 @@ class SwarmExplorationController(Controller):
             self.controllers[d.id] = DroneController(d.id)
             self.slammers[d.id] = Slammer(id, 5, rays)
 
-        self.shared_map = SharedMap(self.ids[0],self.get_maps(),initial_poses)
+        self.shared_map = SharedMap(self.ids[0], self.get_all_maps(), initial_poses)
         self.time_counter = 0
         self.update_rate_map = 3
 
         for k in self.ids:
             self.controllers[k].add_waypoints([np.array([1,0,0]).reshape(3,1)])
         self.init_plot()
+        self.calibration_time = 2
 
     def get_commands(self, states, sensor_data, time_step):
         commands = {}
         self.time_counter += time_step
+
         for key in self.ids:
             update_flag = self.slammers[key].update(sensor_data[key],time_step)
             self.controllers[key].toggle_update_flag(update_flag)
-            commands[key] = self.controllers[key].get_commands(self.slammers[key],states[key], sensor_data[key],time_step)
-        if self.time_counter >= self.update_rate_map:
-            self.time_counter = 0
-            self.shared_map.merge_map(self.get_maps())
-            wps = self.shared_map.get_waypoint_exploration()
-            for i in self.ids:
-                if self.controllers[i].idle:
-                    self.controllers[i].reset_waypoints()
-                    self.controllers[i].add_waypoints([wps[i]])
-            self.update_plot()
+            commands[key] = self.controllers[key].get_commands(self.slammers[key],states[key], sensor_data[key], time_step)
+
+        if self.get_idle_drones() != [] and self.time_counter >= self.calibration_time:
+
+            self.shared_map.merge_map(self.get_all_maps())
+
+            idle_drones = self.get_idle_drones()
+            active_drones = self.get_active_drones()
+
+            idle_drones_pose = self.get_poses(idle_drones)
+            active_drones_end_wp = self.get_assigned_wps(active_drones)
+
+            idle_drones_info = {i: idle_drones_pose[i] for i in idle_drones}
+            active_drones_info = {i: active_drones_end_wp[i] for i in active_drones}
+
+            wps = self.shared_map.get_waypoint_exploration(idle_drones_info, active_drones_info)
+            for ind, i in enumerate(idle_drones):
+                start = self.shared_map.compute_cell(i,  self.slammers[i].get_pose())
+                free_cells = self.shared_map.get_free_cells()
+                c = 0
+                while c < 20:
+                    r = RRT(start, wps[ind]["point"], self.shared_map.get_occupancy_grid(), free_cells)
+                    wp = r.planning()
+                    if wp is not None:
+                        break
+                    c += 1
+
+                if wp is None:
+                    continue
+
+                wp = [self.shared_map.compute_coordinate_local_map(i, w) for w in wp]
+                self.controllers[i].reset_waypoints()
+                self.controllers[i].add_waypoints(wp)
+
+        self.update_plot()
         return commands
 
-    def get_maps(self):
+    def get_poses(self, ids):
+        poses = {}
+        for i in ids:
+            poses[i] = self.slammers[i].get_pose()
+        return poses
+
+    def get_assigned_wps(self, ids):
+        wps = {}
+        for i in ids:
+            wps[i] = self.controllers[i].get_end_wp()
+        return wps
+
+    def get_all_maps(self):
         maps = {}
         for key in self.ids:
             maps[key] = self.slammers[key].get_map()
         return maps
 
+    def get_idle_drones(self):
+        idle_drones = []
+        for i in self.ids:
+            if self.controllers[i].state == "idle":
+                idle_drones.append(i)
+        return idle_drones
+
+    def get_active_drones(self):
+        active_drones = []
+        for i in self.ids:
+            if self.controllers[i].state == "active":
+                active_drones.append(i)
+        return active_drones
+
+    def update_set_point(self, set_point):
+        pass
+
     def visualize(self):
         for i in self.ids:
             self.slammers[i].visualize()
         self.shared_map.visualize()
-
-    def get_idle_drones(self):
-        idle_drones = []
-        for i in self.ids:
-            if self.controllers[i].idle:
-                idle_drones.append(i)
-        return idle_drones
-
-    def update_set_point(self, set_point):
-        pass
 
     def init_plot(self):
         self.fig_ids = self.ids.copy()
