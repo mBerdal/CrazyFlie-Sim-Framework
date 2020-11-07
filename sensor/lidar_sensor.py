@@ -36,7 +36,7 @@ class LidarSensor(Sensor):
         )
 
     def get_reading(self):
-        return {"type": type(self), "reading": self.measurement + self.noise_generator()}
+        return {"type": type(self), "reading": self.measurement + np.random.normal(scale=0.01,size=[self.num_rays,])}
 
     def add_measurement(self, measurements):
         self.measurement = measurements

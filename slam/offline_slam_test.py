@@ -102,7 +102,7 @@ def test_multi_slam(file, drone_ids,num_particles,steps,slam_params, map_params,
                 odometry = np.concatenate([noise_odometry(prev_state[id], current_state), prev_state[id]], axis=1).transpose()
                 meas = drone_info[id]["measurements"][i]
                 slams[id].update_particles(meas, odometry)
-                slam_log[id].append({"map": slams[id].particles[slams[id].best_particle].map.convert_grid_to_prob(),
+                slam_log[id].append({"map": slams[id].particles[slams[id].best_particle].map.convert_log_to_prob(),
                              "pose": slams[id].particles[slams[id].best_particle].pose.copy(), "time": i * 0.05})
                 prev_state[id] = current_state
                 prev_time[id] = i

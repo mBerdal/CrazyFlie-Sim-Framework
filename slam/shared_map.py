@@ -2,10 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sensor.lidar_sensor import LidarSensor
 from queue import Queue
+from slam.path_planning import RRTStar
+
 
 class SharedMap():
     def __init__(self,base_id, maps, initial_poses):
-        self.min_frontier_length = 10
+        self.min_frontier_length = 15
         self.ids = maps.keys()
         self.base_id = base_id
         self.res = maps[base_id].res
@@ -69,7 +71,11 @@ class SharedMap():
         self.rays = LidarSensor(np.array([0, 0, 0.1]), np.array([0, 0, 0]), num_rays=180).ray_vectors
         self.max_range = 10
 
-    def merge_map(self,maps):
+        self.frontiers = None
+        self.unreachable_frontiers = []
+        self.dist_unreachable = 10
+
+    def merge_map(self, maps):
         self.log_prob_map = np.zeros([self.size_x_merged, self.size_y_merged])
         for i in maps.keys():
             if maps[i] is None:
@@ -139,42 +145,76 @@ class SharedMap():
                     except IndexError:
                         pass
                 visited[c[0],c[1]] = 1
-        return frontiers
+        self.frontiers = frontiers
 
     def compute_frontier_points(self):
-        frontiers = self.compute_frontiers()
         frontiers_f = []
-        for f in frontiers:
+        for f in self.frontiers:
             if len(f) >= self.min_frontier_length:
                 frontiers_f.append(np.array(f).T)
         mean = []
         for f in frontiers_f:
-            mean.append(np.mean(f,axis=1))
+            mean_f = np.mean(f,axis=1)
+            unreachable = False
+            for uf in self.unreachable_frontiers:
+                if np.linalg.norm(uf - mean_f) < self.dist_unreachable:
+                    unreachable = True
+            if not unreachable:
+                mean.append(mean_f)
         return mean
 
-    def get_waypoint_exploration(self, idle_drones, active_drones):
+    def assign_waypoints_exploration(self, drones):
+        self.compute_frontiers()
         points = self.compute_frontier_points()
         information_gain = []
         self.get_occupancy_grid()
         for i in range(len(points)):
-            information_gain.append({"point": points[i], "observable_cells": self.calculate_observable_cells(points[i])})
+            information_gain.append({"point": points[i], "observable_cells": self.calculate_observable_cells_from_pos(points[i])})
         assigned_cells = np.zeros(self.log_prob_map.shape)
+        """
         for a in active_drones.keys():
-            observed = self.calculate_observable_cells(active_drones[a])
+            observed = self.calculate_observable_cells_from_pos(active_drones[a])
             for c in observed:
                 assigned_cells[c[0],c[1]] = 1
-
+        """
         def sort_func(e):
             count = 0
             for c in e["observable_cells"]:
                 if assigned_cells[c[0], c[1]] == 0:
                     count += 1
             return count
+        dist = {}
+        information_gain.sort(reverse=True, key=sort_func)
+        occ_grid = self.get_occupancy_grid(pad=True)
+        free_cells = self.get_free_cells()
+        for ind, p in enumerate(information_gain):
+            dist_p = {}
+            for d in drones.keys():
+                cell_d = self.compute_cell_from_coordinate_local_map(d, drones[d])
+                r = RRTStar(cell_d, p["point"], occ_grid, free_cells, run_to_max_iter=True, max_iter=100)
+                res = r.planning()
+                if res is None:
+                    dist_p[d] = {"dist": np.inf, "wps": []}
+                else:
+                    dist_p[d] = {"dist": res[1], "wps": res[0]}
+            dist[ind] = dist_p
 
-        information_gain.sort(reverse=True,key=sort_func)
-        return information_gain
+        unassigned_drones = [k for k in drones.keys()]
+        assignment = {}
+        for ind in range(min(len(drones), len(information_gain))):
+            min_d = unassigned_drones[0]
+            min_dist = np.inf
+            for d in unassigned_drones:
+                if dist[ind][d]["dist"] < min_dist:
+                    min_d = d
+                    min_dist = dist[ind][d]["dist"]
+            if min_dist == np.inf:
+                continue
+            assignment[min_d] = dist[ind][d]["wps"]
+            unassigned_drones.remove(min_d)
+        return assignment
 
-    def calculate_observable_cells(self, pose):
+    def calculate_observable_cells_from_pos(self, pose):
         observed = np.zeros(self.log_prob_map.shape)
         unknowns = []
         pose = pose[0:2].reshape(2,1)
@@ -187,9 +227,7 @@ class SharedMap():
                     observed[c[0],c[1]] = 1
                     unknowns.append(c)
         return unknowns
-    
-    def distance
-    
+
     def grid_traversal(self, start_point, end_point):
         visited_cells = []
         current_cell = self.get_cell(start_point)
@@ -238,27 +276,64 @@ class SharedMap():
                 return []
         return visited_cells
 
+    def check_collision(self, start, end):
+        ray = (end - start)
+        ray = ray / np.linalg.norm(ray)
+
+        step_x = 1 if ray[0] >= 0 else -1
+        step_y = 1 if ray[1] >= 0 else -1
+
+        current_cell = start.copy()
+
+        next_cell_boundary_x = (current_cell[0] + step_x)
+        next_cell_boundary_y = (current_cell[1] + step_y)
+
+        tmax_x = (next_cell_boundary_x - start[0]) / ray[0] if ray[0] != 0 else np.inf
+        tmax_y = (next_cell_boundary_y - start[1]) / ray[1] if ray[1] != 0 else np.inf
+
+        tdelta_x = 1 / ray[0] * step_x if ray[0] != 0 else np.inf
+        tdelta_y = 1 / ray[1] * step_y if ray[1] != 0 else np.inf
+
+        while np.any(current_cell != end):
+            if tmax_x <= tmax_y:
+                current_cell[0] += step_x
+                tmax_x += tdelta_x
+            else:
+                current_cell[1] += step_y
+                tmax_y += tdelta_y
+            if self.occ_grid[current_cell[0], current_cell[1]] == -1:
+                return True
+        return False
+
     def get_cell(self, point):
         x = np.int(np.floor(point[0]))
         y = np.int(np.floor(point[1]))
         return np.array([x,y]).reshape(2,1)
 
-    def compute_coordinate_local_map(self, id, coordinate):
+    def compute_coordinate_from_cell_local_map(self, id, coordinate):
         x = (np.floor(coordinate[0]) - self.center_x)*self.res - self.delta_poses[id][0]
         y = (np.floor(coordinate[1]) - self.center_y)*self.res - self.delta_poses[id][1]
         return np.array([x,y,0],np.float).reshape(3,1)
 
-    def get_occupancy_grid(self):
+    def compute_cell_from_coordinate_local_map(self, id, coordinate):
+        x = np.int(np.floor(coordinate[0] / self.res)) + self.center_x + self.delta_x[id]
+        y = np.int(np.floor(coordinate[1] / self.res)) + self.center_x + self.delta_x[id]
+        return np.array([x,y]).reshape(2,1)
+
+    def get_occupancy_grid(self, pad=False):
         occ_grid = np.zeros(self.log_prob_map.shape)
         occ_grid[self.log_prob_map > self.occ_threshold] = -1
         occ_grid[self.log_prob_map < self.free_threshold] = 1
+        if pad:
+            neighbors_8 = [[-1, 1], [0, 1], [1, 1], [-1, 0], [1, -0], [-1, -1], [0, -1], [1, -1]]
+            occupied_cells_x, occupied_cells_y = np.where(occ_grid==-1)
+            for i in range(len(occupied_cells_x)):
+                for n in neighbors_8:
+                    x = occupied_cells_x[i] + n[0]
+                    y = occupied_cells_y[i] + n[1]
+                    occ_grid[x, y] = 1
         self.occ_grid = occ_grid
         return occ_grid.copy()
-
-    def compute_cell(self, id, coord):
-        x = np.floor(coord[0]/self.res) + self.delta_x[id] + self.center_x
-        y = np.floor(coord[1]/self.res) + self.delta_y[id] + self.center_y
-        return np.array([x,y])
 
     def visualize_frontiers(self, frontiers):
         f_cells = np.zeros(self.log_prob_map.shape)
@@ -275,7 +350,7 @@ class SharedMap():
         plt.imshow(f_cells.T,"Greys", origin="lower",)
         plt.pause(0.1)
 
-    def convert_grid_to_prob(self):
+    def convert_log_to_prob(self):
         exp_grid = np.exp(self.log_prob_map)
         return exp_grid/(1+exp_grid)
 
@@ -284,20 +359,23 @@ class SharedMap():
         cells = np.concatenate([cells[0].reshape(-1,1),cells[1].reshape(-1,1)],axis=1)
         return cells
 
+    def add_unreachable_frontier(self, frontier):
+        self.unreachable_frontiers.append(frontier)
+
     def init_plot(self, axis):
-        im = axis.imshow(self.convert_grid_to_prob().transpose(), "Greys", origin="lower",
+        im = axis.imshow(self.convert_log_to_prob().transpose(), "Greys", origin="lower",
                          extent=[-self.size_x_merged / 2 * self.res, self.size_x_merged / 2 * self.res, -self.size_y_merged / 2 * self.res,
                                  self.size_y_merged / 2 * self.res])
         return im
 
     def update_plot(self, im):
-        im.set_data(self.convert_grid_to_prob().transpose())
+        im.set_data(self.convert_log_to_prob().transpose())
         im.autoscale()
         return im
 
     def visualize(self):
         plt.figure()
-        plt.imshow(self.convert_grid_to_prob().transpose(), "Greys", origin="lower",
-                         extent=[-self.size_x_merged / 2 * self.res, self.size_x_merged / 2 * self.res, -self.size_y_merged / 2 * self.res,
+        plt.imshow(self.convert_log_to_prob().transpose(), "Greys", origin="lower",
+                   extent=[-self.size_x_merged / 2 * self.res, self.size_x_merged / 2 * self.res, -self.size_y_merged / 2 * self.res,
                                  self.size_y_merged / 2 * self.res])
         plt.show()

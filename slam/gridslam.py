@@ -30,6 +30,7 @@ class GridSLAM(Loggable):
             p.update_particle(measurements,odometry)
         self.normalize_weights()
         if self.n_eff < self.threshold_resampling:
+            print("Resampling particles!")
             self.resample_particles()
         self.counter += 1
 
@@ -98,7 +99,7 @@ class GridSLAM(Loggable):
     def get_time_entry(self):
         return LogEntry(
             pose=self.get_best_pose().copy(),
-            map=self.get_best_map().convert_grid_to_prob(),
+            map=self.get_best_map().convert_log_to_prob(),
             id=self.id,
             counter=self.counter
         )
@@ -106,7 +107,7 @@ class GridSLAM(Loggable):
     def generate_time_entry(self):
         return LogEntry(
             pose=self.get_best_pose().copy(),
-            map=self.get_best_map().convert_grid_to_prob(),
+            map=self.get_best_map().convert_log_to_prob(),
             id=self.id
         )
 
