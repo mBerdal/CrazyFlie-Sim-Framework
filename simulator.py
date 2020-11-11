@@ -20,13 +20,16 @@ class Simulator():
         self.log_to_file = kwargs.get("log_to_file", None)
         self.env_to_file = kwargs.get("env_to_file", None)
         self.con_to_file = kwargs.get("con_to_file", None)
+        self.shared_map_to_file=kwargs.get("shared_map_to_file",None)
+        self.slam_to_file = kwargs.get("slam_to_file",None)
         self.environment = kwargs.get("environment", None)
         self.drones = kwargs.get("drones", None)
         self.logger = kwargs.get("logger", None)
         self.controller = kwargs.get("controller", None)
-
+        self.stop_flag = False
         assert (not self.logger is None) or not (
                     self.drones is None or self.controller is None or self.environment is None)
+        self.controller.set_simulation_callback(self.stop_simulation_callback)
 
         if not self.logger is None:
             self.environment = self.logger.get_environment()
@@ -47,15 +50,21 @@ class Simulator():
         for time in self.time_line:
             print("Time: {:.2f}".format(time))
             self.__sim_step(step_length_seconds, time)
-
+            if self.stop_flag:
+                self.time_line = np.arange(0, time+step_length_seconds,step_length_seconds)
+                break
         if not self.log_to_file is None:
-            self.logger.save_log(self.log_to_file,env_to_file= self.env_to_file,slam_to_file= self.con_to_file)
+            self.logger.save_log(self.log_to_file,env_to_file= self.env_to_file,con_to_file=self.con_to_file,
+                                 slam_to_file= self.slam_to_file, shared_map_to_file=self.shared_map_to_file)
 
     def __sim_step(self, step_length, time):
         self.drone_swarm.sim_step(step_length, self.environment)
         for d in self.drone_swarm.drones:
             self.logger.log_time_step(d.get_time_entry(), time)
-        #self.logger.log_time_step_controller(self.controller.get_time_entry(), time)
+        self.logger.log_time_step_controller(self.controller.get_time_entry(), time)
+
+    def stop_simulation_callback(self):
+        self.stop_flag = True
 
     def visualize(self):
         fig, axis = plt.subplots(1)

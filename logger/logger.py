@@ -21,7 +21,7 @@ class Logger():
 """
 
     def __init__(self, drones=[], environment=None, controller=None):
-        self.log = {"environment": environment, "drones": {}, "controller": {}}
+        self.log = {"environment": environment, "drones": {}, "controller": {}, "slammers": {}, "shared_map": {}}
         self.__log_info(drones)
         self.__log_info_controller(controller)
 
@@ -88,12 +88,24 @@ class Logger():
     def log_time_step_controller(self, log_entry, timestep):
         for entry in log_entry.controllers:
             try:
-                if entry.counter not in self.log["controller"][entry.id]["counter"]:
-                    self.log["controller"][entry.id]["log"][timestep] = entry
-                    self.log["controller"][entry.id]["counter"].append(entry.counter)
+                self.log["controller"][entry.id]["log"][timestep] = entry
             except KeyError:
                 self.log["controller"][entry.id]["log"] = {timestep: entry}
-                self.log["controller"][entry.id]["counter"] = [entry.counter]
+        for entry in log_entry.slammers:
+            try:
+                if entry.counter not in self.log["slammers"][entry.id]["counter"]:
+                    self.log["slammers"][entry.id]["log"][timestep] = entry
+                    self.log["slammers"][entry.id]["counter"].append(entry.counter)
+            except KeyError:
+                self.log["slammers"][entry.id]["log"] = {timestep: entry}
+                self.log["slammers"][entry.id]["counter"] = [entry.counter]
+        try:
+            if log_entry.shared_map.counter not in self.log["shared_map"]["counter"]:
+                self.log["shared_map"]["log"][timestep] = log_entry.shared_map
+                self.log["shared_map"]["counter"].append(log_entry.shared_map.counter)
+        except KeyError:
+            self.log["shared_map"]["log"] = {timestep: log_entry.shared_map}
+            self.log["shared_map"]["counter"] = [log_entry.shared_map.counter]
 
     def log_info(self, log_entry) -> None:
         self.log["drones"][log_entry.id]["info"] = log_entry
@@ -101,7 +113,7 @@ class Logger():
     def log_controller_info(self, log_entry):
         self.log["controller"][log_entry.id]["info"] = log_entry
 
-    def save_log(self, filename, env_to_file=None, slam_to_file=None):
+    def save_log(self, filename, env_to_file=None, con_to_file=None, slam_to_file=None, shared_map_to_file=None):
         assert not filename is None, "filename not supplied. save_log failed"
 
         lg = deepcopy(self.log)
@@ -119,18 +131,34 @@ class Logger():
                 lg["environment"] = {"path": env_to_file}
                 write_json(env_to_file, self.log["environment"].to_JSONable())
 
-
-
-        if slam_to_file is not None:
+        if con_to_file is not None:
             for _, c_log in lg["controller"].items():
                 c_log["info"] = c_log["info"].to_JSONable()
                 for step, step_log in c_log["log"].items():
                     c_log["log"][step] = step_log.to_JSONable()
-            write_json(slam_to_file, lg["controller"])
+            write_json(con_to_file, lg["controller"])
             lg["controller"] = {"path": slam_to_file}
         else:
             lg["controller"] = {}
 
+        if slam_to_file is not None:
+            for _, c_log in lg["slammers"].items():
+                c_log["info"] = c_log["info"].to_JSONable()
+                for step, step_log in c_log["log"].items():
+                    c_log["log"][step] = step_log.to_JSONable()
+            write_json(slam_to_file, lg["slammers"])
+            lg["slammers"] = {"path": slam_to_file}
+        else:
+            lg["slammers"] = {}
+
+        if shared_map_to_file is not None:
+            lg["shared_map"]["info"] = lg["shared_map"]["info"].to_JSONable()
+            for step, step_log in lg["shared_map"]["log"].items():
+                lg["shared_map"]["log"][step] = step_log.to_JSONable()
+            write_json(shared_map_to_file,lg["shared_map"])
+            lg["shared_map"] = {"path": shared_map_to_file}
+        else:
+            lg["shared_map"] = {}
         write_json(filename, lg)
 
     def get_environment(self):
@@ -181,9 +209,10 @@ class Logger():
             self.log["drones"][d.id] = {"info": d.get_info_entry()}
 
     def __log_info_controller(self, controller):
-        for ids in controller.controllers.keys():
+        for ids in controller.ids:
             self.log["controller"][ids] = {"info": controller.controllers[ids].get_info_entry()}
-
+            self.log["slammers"][ids] = {"info": controller.slammers[ids].get_info_entry()}
+        self.log["shared_map"] = {"info": controller.shared_map.get_info_entry()}
 
     def __get_drone_state_at_time(self, drone_id, timestep):
         return self.log["drones"][drone_id]["trajectory"][timestep].state

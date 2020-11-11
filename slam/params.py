@@ -1,7 +1,7 @@
 import numpy as np
 
 slam_params = {
-    "threshold_resampling": 1.25
+    "threshold_resampling": 2
 }
 
 particle_params = {

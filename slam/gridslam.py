@@ -3,7 +3,6 @@ import multiprocessing as mp
 from slam.particle import Particle
 from logger.loggable import Loggable
 from logger.log_entry import LogEntry
-import matplotlib.pyplot as plt
 
 from inspect import getmodule
 from copy import deepcopy
@@ -35,8 +34,6 @@ class GridSLAM(Loggable):
         self.counter += 1
 
     def update_particles_mp(self, measurements, odometry):
-        #meas = [measurements.copy() for i in range(self.num_particles)]
-        #odo= [odometry.copy() for i in range(self.num_particles)]
         process = []
         q = mp.Queue()
         for p in self.particles:
@@ -97,18 +94,29 @@ class GridSLAM(Loggable):
         self.particles[self.best_particle].visualize()
 
     def get_time_entry(self):
-        return LogEntry(
-            pose=self.get_best_pose().copy(),
-            map=self.get_best_map().convert_log_to_prob(),
-            id=self.id,
-            counter=self.counter
-        )
+        if self.counter % 10 == 0:
+            return LogEntry(
+                pose=self.get_best_pose(),
+                map=self.get_best_map().convert_grid_to_prob(),
+                id=self.id,
+                counter=self.counter,
+                n_eff=self.n_eff
+            )
+        else:
+            return LogEntry(
+                pose=self.get_best_pose(),
+                id=self.id,
+                counter=self.counter,
+                n_eff=self.n_eff
+            )
 
     def generate_time_entry(self):
         return LogEntry(
             pose=self.get_best_pose().copy(),
-            map=self.get_best_map().convert_log_to_prob(),
-            id=self.id
+            map=self.get_best_map().convert_grid_to_prob(),
+            id=self.id,
+            counter=self.counter,
+            n_eff=self.n_eff
         )
 
     def get_info_entry(self):

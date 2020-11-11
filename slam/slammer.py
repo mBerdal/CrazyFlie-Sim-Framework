@@ -51,20 +51,18 @@ class Slammer(Loggable):
             self.increment_time_counter(time_step)
             if self.time_counter >= self.update_time:
                 update_flag = True
-                print("Time")
             if diff_translation >= self.update_translation:
-                print("Translation")
                 update_flag = True
             if diff_rotation >= self.update_rotation:
-                print("Rotation")
                 update_flag = True
 
             if update_flag:
-                print("Updating SLAM")
+                print("Updating SLAM, Id:", self.id)
                 odometry = np.concatenate([odometry_data.reshape(1, 3), self.prev_odometry.reshape(1,3)], axis=0)
                 self.slam.update_particles_mp(lidar_data,odometry)
 
                 self.reset_time_counter()
+                self.increment_time_counter(time_step)
                 self.prev_odometry = odometry_data.copy()
         return update_flag
 

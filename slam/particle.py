@@ -2,7 +2,6 @@ from slam.map import SLAM_map
 from slam.scan_matcher import ScanMatcher
 from slam.probability_models import OdometryModel, ObservationModel
 from utils.rotation_utils import ssa
-import time
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
@@ -36,8 +35,6 @@ class Particle:
     def update_particle(self, measurements, odometry, q):
         odometry_pose = self.odometry_update(odometry)
         scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
-        #if score < self.min_diff:
-        #    scan_pose = odometry_pose
         samples = []
         for x in self.translation_sample:
             for y in self.translation_sample:
@@ -84,15 +81,16 @@ class Particle:
         except:
             pose = scan_pose
             self.weight = 1e-200
+
         if self.counter < 3:
             self.counter += 1
-            pose[2] = 0
+            pose = self.pose
+
         pose[2] = pose[2] % (2*np.pi)
+
         self.pose = pose
         self.map.integrate_scan(pose, measurements, self.ray_vectors)
         self.trajectory.append(self.pose.copy())
-        #print("Motion:",n_mot)
-        #print("Observation:",n_obs)
         q.put(self)
 
     def update_weight(self, weight):

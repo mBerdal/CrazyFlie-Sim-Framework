@@ -78,19 +78,6 @@ class RRT:
 
         tdelta_x = 1 / ray[0] * step_x if ray[0] != 0 else np.inf
         tdelta_y = 1 / ray[1] * step_y if ray[1] != 0 else np.inf
-
-        neg_ray = False
-        diff = np.zeros([2,1], np.int)
-        """
-        if current_cell[0] != end.coord[0] and ray[0] < 0:
-            diff[0] -= 1
-            neg_ray = True
-        if current_cell[1] != end.coord[1] and ray[1] < 0:
-            diff[1] -= 1
-            neg_ray = True
-        if neg_ray:
-            current_cell += diff
-        """
         i = 0
         while np.any(current_cell != end.coord) and i < self.expand_dist:
             if tmax_x <= tmax_y:
@@ -123,18 +110,6 @@ class RRT:
         tdelta_x = 1 / ray[0] * step_x if ray[0] != 0 else np.inf
         tdelta_y = 1 / ray[1] * step_y if ray[1] != 0 else np.inf
 
-        neg_ray = False
-        diff = np.zeros([2, 1], np.int)
-        """
-        if current_cell[0] != end.coord[0] and ray[0] < 0:
-            diff[0] -= 1
-            neg_ray = True
-        if current_cell[1] != end.coord[1] and ray[1] < 0:
-            diff[1] -= 1
-            neg_ray = True
-        if neg_ray:
-            current_cell += diff
-        """
         while np.any(current_cell != end.coord):
             if tmax_x <= tmax_y:
                 current_cell[0] += step_x
@@ -155,7 +130,7 @@ class RRT:
         i = 0
         c = 0
         while current_node is not self.start:
-            if not self.check_collision(wps[i], current_node) and c < 3:
+            if not self.check_collision(wps[i], current_node) and c < 5:
                 prev_node = current_node
                 current_node = current_node.parent
                 c += 1
@@ -165,6 +140,7 @@ class RRT:
                 c = 0
             if i > 100:
                 return None
+
         wps = [w.coord for w in wps]
         wps.reverse()
         dist_list = [self.start.coord]
@@ -184,7 +160,7 @@ class RRT:
                 plt.plot(x,y,"-o",color="b",markersize=1)
         plt.plot(self.start.coord[0],self.start.coord[1],"xr")
         plt.plot(self.target.coord[0],self.target.coord[1],"xg")
-        plt.show()
+        plt.pause(0.1)
 
 
 class RRTStar(RRT):

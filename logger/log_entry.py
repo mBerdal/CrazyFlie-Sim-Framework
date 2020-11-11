@@ -13,7 +13,15 @@ class LogEntry():
       if isinstance(v, LogEntry):
         d[k] = v.to_JSONable()
       elif isinstance(v, list):
-        d[k] = [item.to_JSONable() if isinstance(item, LogEntry) else item for item in v]
+        items = []
+        for item in v:
+          if isinstance(item, LogEntry):
+            items.append(item.to_JSONable())
+          elif isinstance(item,np.ndarray):
+            items.append(item.tolist())
+          else:
+            items.append(item)
+        d[k] = items
       elif isinstance(v, np.ndarray):
         d[k] = v.tolist()
     return d
