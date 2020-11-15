@@ -14,7 +14,8 @@ class ScanMatcher():
 
     def __init__(self, **kwargs):
         self.max_sensor_range = kwargs.get("max_sensor_range",10)
-        self.padding_dist = 2.0
+        self.padding_dist = 1.0
+        self.skip_rays = kwargs.get("skip_rays",4)
 
         self.sigma = kwargs.get("sigma",0.3)
         self.p_unknown = 0.3
@@ -30,15 +31,15 @@ class ScanMatcher():
                               np.array([0, 0, -self.delta_theta]), np.array([0, 0, self.delta_theta])]
 
 
-        self.kernel_size = kwargs.get("kernel_size",5)
+        self.kernel_size = kwargs.get("kernel_size",2)
         self.kernel_var = kwargs.get("kernel_var",1)
-        self.kernel = gaussian_kernel_2d(self.kernel_size, self.kernel_var)
+        self.kernel = gaussian_kernel_2d(self.kernel_size, self.sigma)
 
         self.occ_threshold = kwargs.get("occ_threshold",0.7)
 
     def scan_match(self, rays, meas, initial_pose, map):
         map_res = map.res
-        like_field, lower_x, lower_y = self.compute_distance_field(map, initial_pose)
+        like_field, lower_x, lower_y = self.compute_likelihood_field(map, initial_pose)
         step = self.initial_step
         iterations = 0
         current_pose = initial_pose
@@ -68,7 +69,8 @@ class ScanMatcher():
     def score_scan(self, rays, measurements, pose, like_field, lower_x, lower_y, map_res):
         q = 0
         pose = pose.squeeze()
-        rays = rot_matrix_2d(pose[2]) @ rays[0:2,:]
+        rays = rot_matrix_2d(pose[2]) @ rays[0:2,0::self.skip_rays]
+        measurements = measurements[0::self.skip_rays]
         for ind, meas in enumerate(measurements):
             if meas == np.inf:
                 continue
@@ -132,84 +134,3 @@ class ScanMatcher():
         #unknown_area = prob_field == 0
         #dist_field[unknown_area] = self.p_unknown
         return dist_field, (lower_x - map.center_x)*map.res, (lower_y-map.center_y)*map.res
-
-np.random.seed(0)
-
-def test_scan_matcher():
-    end = 250
-    step = 5
-
-    log = Logger()
-    log.load_from_file("test_lidar22.json")
-
-    measurements = log.get_drone_sensor_measurements("0", 0)
-    states = log.get_drone_states("0")
-    sensor_specs = log.get_drone_sensor_specs("0", 0)
-
-    sensor = LidarSensor(sensor_specs.sensor_pos_bdy, sensor_specs.sensor_attitude_bdy, num_rays=144)
-    rays = sensor.ray_vectors
-
-    scan_params =  {
-        "max_iterations": 20,
-        "delta_x": 0.2,
-        "delta_y": 0.2,
-        "step": 1,
-        "sigma": 0.1,
-    }
-    scan = ScanMatcher(**scan_params)
-    error_initial = []
-    error_matched = []
-    steps = []
-    map = SLAM_map()
-    for i in range(0,end,step):
-        meas = measurements["measurements"][i]
-        pose = states["states"][i][[0,1,5]]
-        map.integrate_scan(pose,meas,rays)
-
-        pose_scan = states["states"][i+step][[0,1,5]]
-        meas_scan = measurements["measurements"][i]
-        bounds = np.array([0.5,0.5,0.20]).reshape(3,1)
-        pose_scan_pet = pose_scan + np.random.uniform(-bounds,bounds,[3,1])
-        pose_matched = scan.scan_match(rays,meas_scan,pose_scan_pet,map)
-
-        def visualize():
-            plt.figure()
-            plt.imshow(map.convert_grid_to_prob().transpose(),origin="lower",extent=[-map.size_x/2*map.res,map.size_x/2*map.res,-map.size_x/2*map.res,map.size_x/2*map.res])
-            plt.plot(pose_scan_pet[0],pose_scan_pet[1],"ro",markersize=2)
-            plt.plot(pose_scan[0],pose_scan[1],"go",markersize=2)
-            plt.plot(pose_matched[0],pose_matched[1],"bo",markersize=2)
-            plt.show()
-        error_initial.append(pose_scan_pet-pose_scan)
-        error_matched.append(pose_matched-pose_scan)
-        steps.append(i)
-    start = time.time()
-    dist_field = scan.compute_distance_field(map,pose)
-    end = time.time()
-    print(end-start)
-    error_initial = np.array(error_initial).squeeze()
-    error_matched = np.array(error_matched).squeeze()
-
-    f, (ax1,ax2,ax3) = plt.subplots(3,1)
-
-    ax1.plot(steps,error_initial[:,0],"b")
-    ax1.plot(steps,error_matched[:,0],"r")
-    ax1.legend(["Initial","Matched"])
-    print("Total initial error x:", np.sum(np.abs(error_initial[:,0])))
-    print("Total mathced error x:", np.sum(np.abs(error_matched[:,0])))
-
-    ax2.plot(steps, error_initial[:, 1], "b")
-    ax2.plot(steps, error_matched[:, 1], "r")
-    ax2.legend(["Initial", "Matched"])
-    print("Total initial error y:", np.sum(np.abs(error_initial[:, 1])))
-    print("Total mathced error y:", np.sum(np.abs(error_matched[:, 1])))
-
-    ax3.plot(steps, error_initial[:, 2], "b")
-    ax3.plot(steps, error_matched[:, 2], "r")
-    ax3.legend(["Initial", "Matched"])
-    print("Total initial error theta:", np.sum(np.abs(error_initial[:, 2])))
-    print("Total mathced error theta:", np.sum(np.abs(error_matched[:, 2])))
-    plt.show()
-
-
-if __name__ == "__main__":
-    test_scan_matcher()

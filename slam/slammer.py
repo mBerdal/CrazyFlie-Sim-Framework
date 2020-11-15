@@ -59,7 +59,7 @@ class Slammer(Loggable):
             if update_flag:
                 print("Updating SLAM, Id:", self.id)
                 odometry = np.concatenate([odometry_data.reshape(1, 3), self.prev_odometry.reshape(1,3)], axis=0)
-                self.slam.update_particles_mp(lidar_data,odometry)
+                self.slam.update_particles(lidar_data,odometry)
 
                 self.reset_time_counter()
                 self.increment_time_counter(time_step)

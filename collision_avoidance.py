@@ -19,7 +19,7 @@ class PredicativeCollisionAvoidance:
         self.velocity_commands = [0.25, 0.5, 1]
 
         self.time_step_simulation = 0.1
-        self.time_horizon = 3
+        self.time_horizon = 2
 
         self.heading_delta_max = np.deg2rad(270)
         self.vel_delta_max = 2
@@ -53,13 +53,6 @@ class PredicativeCollisionAvoidance:
             err_y = waypoint[1] - t[1]
             heading_waypoint = np.arctan2(err_y, err_x) % (2 * np.pi)
             navigation_score += abs(ssa(heading_waypoint,t[2]))
-            x_cell = np.int(np.floor((t[0] - distance_grid["lower_x"])/distance_grid["res"]))
-            y_cell = np.int(np.floor((t[1] - distance_grid["lower_y"]) / distance_grid["res"]))
-            try:
-                distance = distance_grid["grid"][x_cell,y_cell]
-            except:
-                distance = 2
-            avoidance_score += 1/(distance+self.eps)**2
 
         return navigation_score, avoidance_score
 

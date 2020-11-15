@@ -5,8 +5,6 @@ slam_params = {
 }
 
 particle_params = {
-    "num_samples": 40,
-    "eps": np.array([0.05,0.05,0.020],np.float).reshape(3,1)
 }
 
 map_params = {
@@ -23,7 +21,8 @@ scan_match_params = {
         "delta_theta": 0.05,
         "step": 1,
         "sigma": 0.1,
-        "max_sensor_range": 10
+        "max_sensor_range": 10,
+        "skip_rays": 6,
     }
 
 odometry_params = {
@@ -36,5 +35,6 @@ odometry_params = {
 obs_params = {
     "sigma": 0.10,
     "occ_threshold": 0.7,
-    "max_sensor_range": 10
+    "max_sensor_range": 10,
+    "skip_rays": 6
 }

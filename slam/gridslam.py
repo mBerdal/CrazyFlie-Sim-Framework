@@ -7,6 +7,7 @@ from logger.log_entry import LogEntry
 from inspect import getmodule
 from copy import deepcopy
 
+import matplotlib.pyplot as plt
 
 class GridSLAM(Loggable):
 
@@ -89,6 +90,15 @@ class GridSLAM(Loggable):
     def update_plot(self, objs):
         objects = self.particles[self.best_particle].update_plot(objs)
         return objects
+
+    def visualize_all_particles(self):
+        total_map = np.zeros(self.particles[self.best_particle].map.log_prob_map.shape)
+        for p in self.particles:
+            total_map += p.map.log_prob_map
+        prob_map = np.exp(total_map)/(1+np.exp(total_map))
+        plt.figure()
+        plt.imshow(prob_map.T,origin="lower")
+        plt.show()
 
     def visualize(self):
         self.particles[self.best_particle].visualize()

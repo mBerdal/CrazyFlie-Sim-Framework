@@ -2,13 +2,9 @@ from abc import ABC, abstractmethod
 import numpy as np
 from scipy.stats import norm
 from scipy.signal import convolve2d
-from slam.map import SLAM_map
 from utils.rotation_utils import ssa, rot_matrix_2d
 from utils.misc import gaussian_kernel_2d
-from logger.logger import Logger
-import matplotlib.pyplot as plt
-import matplotlib
-from sensor.lidar_sensor import LidarSensor
+
 class ProbModel(ABC):
 
     def __init__(self):
@@ -79,10 +75,9 @@ class OdometryModel(ProbModel):
 
 class ObservationModel:
     def __init__(self, ray_vectors,**kwargs):
-        self.kernel_size = kwargs.get("kernel_size",5)
-        self.kernel_var = kwargs.get("kernel_var",1)
-        self.kernel = gaussian_kernel_2d(self.kernel_size,self.kernel_var)
         self.ray_vectors = ray_vectors
+        self.skip_rays = kwargs.get("skip_rays",4)
+        self.ray_vectors = self.ray_vectors[:,0::self.skip_rays]
         self.occ_threshold = kwargs.get("occ_threshold",0.7)
         self.eps = 0.1
 
@@ -96,11 +91,15 @@ class ObservationModel:
 
         self.max_sensor_range = kwargs.get("max_sensor_range", 4)
         self.padding_dist = 2.0
+        self.kernel_size = kwargs.get("kernel_size", 2)
+        self.kernel_var = kwargs.get("kernel_var", 0.3)
+        self.kernel = gaussian_kernel_2d(self.kernel_size, self.sigma)
 
     def likelihood(self, pose, measurements):
         q = 1
         pose = pose.squeeze()
         rays = rot_matrix_2d(pose[2]) @ self.ray_vectors[0:2, :]
+        measurements = measurements[0::self.skip_rays]
         for ind, meas in enumerate(measurements):
             if meas == np.inf:
                 continue
@@ -114,13 +113,33 @@ class ObservationModel:
                 pass
         return q
 
-    def compute_likelihood_field(self, map):
-        prob_field = map.log_prob_map.copy()
-        binary_field = prob_field > np.log(self.occ_threshold/(1-self.occ_threshold))
+    def compute_likelihood_field(self, initial_pose, map):
+        lower_x = np.int(
+            np.floor((initial_pose[0] - self.max_sensor_range - self.padding_dist) / map.res)) + map.center_x
+        lower_y = np.int(
+            np.floor((initial_pose[1] - self.max_sensor_range - self.padding_dist) / map.res)) + map.center_y
+
+        upper_x = np.int(
+            np.floor((initial_pose[0] + self.max_sensor_range + self.padding_dist) / map.res)) + map.center_x + 1
+        upper_y = np.int(
+            np.floor((initial_pose[1] + self.max_sensor_range + self.padding_dist) / map.res)) + map.center_y + 1
+
+        lower_x = max([lower_x, 0])
+        lower_y = max([lower_y, 0])
+
+        upper_x = min([upper_x, map.size_x])
+        upper_y = min([upper_y, map.size_y])
+
+        prob_field = map.log_prob_map[lower_x:upper_x, lower_y:upper_y].copy()
+
+        binary_field = prob_field > np.log(self.occ_threshold / (1 - self.occ_threshold))
         like_field = convolve2d(binary_field, self.kernel, mode="same")
         unknown_area = prob_field == 0
-        like_field[unknown_area] = 1/self.max_sensor_range**2
+        like_field[unknown_area] = self.p_unknown
         self.like_field = like_field
+        self.lower_x = (lower_x - map.center_x) * map.res
+        self.lower_y = (lower_y - map.center_y) * map.res
+        self.map_res = map.res
 
     def compute_likelihood_field_dist(self,initial_pose,map):
         lower_x = np.int(
@@ -161,150 +180,3 @@ class ObservationModel:
         self.lower_x = (lower_x - map.center_x) * map.res
         self.lower_y = (lower_y - map.center_y) * map.res
         self.map_res = map.res
-
-def visualize_observations(pose, rays, meas, map, likelihood):
-    rays = rot_matrix_2d(pose[2].squeeze()) @ rays[0:2,:]
-    fig, ax = plt.subplots(1)
-    ax.imshow(likelihood.transpose(), origin="lower")
-    drone = plt.Circle([pose[0], pose[1]],radius=3)
-    drone_coord_x= pose[0]/map.res + map.center_x
-    drone_coord_y= pose[1]/map.res + map.center_y
-    ax.add_patch(drone)
-    for i in range(len(meas)):
-        ray = rays[:, i]
-        if meas[i] == np.inf:
-            continue
-        else:
-            end_point = pose[0:2] + ray.reshape(2, 1) * meas[i]
-            end_point_x = end_point[0] / map.res + map.center_x
-            end_point_y = end_point[1] / map.res + map.center_y
-        ax.plot([drone_coord_x,end_point_x],[drone_coord_y,end_point_y],color="red")
-    plt.pause(1)
-    plt.close()
-
-def test_prob_motion():
-    log = Logger()
-    log.load_from_file("test_lidar22.json")
-
-    measurements = log.get_drone_sensor_measurements("0", 0)
-    states = log.get_drone_states("0")
-    sensor_specs = log.get_drone_sensor_specs("0", 0)
-
-    sensor = LidarSensor(sensor_specs.sensor_pos_bdy, sensor_specs.sensor_attitude_bdy, num_rays=144)
-    rays = sensor.ray_vectors
-
-    map = SLAM_map()
-    model = OdometryModel()
-    for i in range(10,250,10):
-        pose1 = states["states"][i-10][[0,1,5]]
-        pose2 = states["states"][i][[0,1,5]]
-        print(pose2-pose1)
-
-        odometry = np.concatenate([pose1,pose2],axis=1).transpose()
-
-
-
-        x = np.arange(pose2[0] - 1, pose2[0] + 1 + 0.02, 0.02)
-        y = np.arange(pose2[1] - 1, pose2[1] + 1 + 0.02, 0.02)
-        xx, yy = np.meshgrid(x, y)
-        likelihood = np.zeros(xx.shape)
-        for x in range(xx.shape[0]):
-            for y in range(xx.shape[1]):
-                likelihood[x,y] = model.likelihood(np.array([xx[x,y],yy[x,y],pose2[2]],np.float).reshape(3,1),pose1,odometry)
-
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
-        ax.plot_surface(xx, yy, likelihood, cmap=matplotlib.cm.coolwarm)
-        plt.show()
-
-    rots = np.arange(-np.pi,np.pi,np.pi/180)
-    likelihood = np.zeros(rots.shape)
-    for i in range(len(rots)):
-        p = np.zeros([3,1])
-        p[0:2] = pose2[0:2]
-        p[2] = rots[i]
-        likelihood[i] = model.likelihood(p,pose1,odometry)
-
-    fig = plt.figure()
-    ax = fig.gca()
-    ax.plot(rots,likelihood)
-    plt.show()
-
-
-def test_prob_obs():
-    log = Logger()
-    log.load_from_file("test_lidar22.json")
-
-    measurements = log.get_drone_sensor_measurements("0", 0)
-    states = log.get_drone_states("0")
-    sensor_specs = log.get_drone_sensor_specs("0", 0)
-
-    sensor = LidarSensor(sensor_specs.sensor_pos_bdy, sensor_specs.sensor_attitude_bdy, num_rays=144)
-    rays = sensor.ray_vectors
-
-    map = SLAM_map()
-
-    end = 250
-    step = 10
-    obs = ObservationModel(rays, kernel_size=5, kernel_variance=1)
-    model = OdometryModel()
-    obs.compute_likelihood_field(map)
-
-    def visualize_map(obs_model):
-        plt.figure()
-        plt.imshow(obs.like_field.transpose(),origin="lower")
-        plt.colorbar()
-        plt.show()
-    #visualize_map(obs)
-    for i in range(step,end,step):
-        meas = measurements["measurements"][i-step]
-        pose = states["states"][i-step][[0,1,5]]
-        map.integrate_scan(pose,meas,rays)
-        x = np.arange(pose[0] - 1, pose[0] + 1 + 0.01, 0.01)
-        y = np.arange(pose[1] - 1, pose[1] + 1 + 0.01, 0.01)
-        xx, yy = np.meshgrid(x, y)
-        rot = np.zeros(xx.shape)
-
-        pose1 = states["states"][i - step][[0, 1, 5]]
-        pose2 = states["states"][i][[0, 1, 5]]
-
-        odometry = np.concatenate([pose1, pose2], axis=1).transpose()
-
-
-        meas1 = measurements["measurements"][i]
-        pose1 = states["states"][i][[0,1,5]]
-        x = np.arange(pose1[0]-1,pose1[0]+1+0.02,0.02)
-        y = np.arange(pose1[1]-1,pose1[1]+1+0.02,0.02)
-        xx, yy = np.meshgrid(x,y)
-        likelihood = np.zeros(xx.shape)
-        rot = np.zeros(xx.shape)
-        obs.compute_likelihood_field_dist(pose1,map)
-        visualize_map(obs)
-        for x in range(xx.shape[0]):
-            for y in range(xx.shape[1]):
-                likelihood[x,y] = obs.likelihood(map,np.array([xx[x,y],yy[x,y],pose1[2]],np.float).reshape(3,1),meas1)*model.likelihood(np.array([xx[x,y],yy[x,y],pose1[2]],np.float).reshape(3,1),pose,odometry)
-
-        fig = plt.figure()
-        ax = fig.gca(projection='3d')
-        ax.plot_surface(xx, yy, likelihood, cmap=matplotlib.cm.coolwarm)
-        plt.pause(0.1)
-
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
-    ax.plot_surface(xx,yy,likelihood,cmap=matplotlib.cm.coolwarm)
-    plt.show()
-
-    rots = np.arange(-np.pi, np.pi, np.pi / 180)
-    likelihood = np.zeros(rots.shape)
-    for i in range(len(rots)):
-        pose[2] = rots[i]
-        likelihood[i] = obs.likelihood(map,pose,meas)
-
-    fig = plt.figure()
-    ax = fig.gca()
-    ax.plot(rots, likelihood)
-    plt.show()
-
-if __name__ == "__main__":
-    test_prob_motion()
-

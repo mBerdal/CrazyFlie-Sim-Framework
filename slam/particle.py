@@ -5,6 +5,7 @@ from utils.rotation_utils import ssa
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
+from slam.icp import icp
 
 
 class Particle:
@@ -31,9 +32,14 @@ class Particle:
         self.angular_sample = np.linspace(-np.deg2rad(3),np.deg2rad(3),5)
         self.trajectory = [initial_pose.copy()]
         self.counter = 0
+        self.previous_points = None
 
-    def update_particle(self, measurements, odometry, q):
+    def update_particle(self, measurements, odometry):
         odometry_pose = self.odometry_update(odometry)
+        #if self.previous_points is not None:
+        #    points = self.ray_vectors[0:2,:]*measurements + odometry_pose[0:2]
+        #    points = points[~np.any(np.isinf(points), axis=1)]
+        #    translation = icp(self.previous_points.T,points.T)
         scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
         samples = []
         for x in self.translation_sample:
@@ -47,7 +53,7 @@ class Particle:
         n_obs = 0
         n_mot = 0
 
-        self.observation_model.compute_likelihood_field_dist(scan_pose,self.map)
+        self.observation_model.compute_likelihood_field(scan_pose,self.map)
 
         for s in samples:
             l_obs = self.observation_model.likelihood(s, measurements)
@@ -91,7 +97,8 @@ class Particle:
         self.pose = pose
         self.map.integrate_scan(pose, measurements, self.ray_vectors)
         self.trajectory.append(self.pose.copy())
-        q.put(self)
+        self.previous_points = self.ray_vectors[0:2,:] * measurements + self.pose[0:2]
+        #q.put(self)
 
     def update_weight(self, weight):
         self.weight = weight
@@ -107,7 +114,7 @@ class Particle:
         pose[2] = (self.pose[2] + diff[2]) % (2*np.pi)
         return pose
 
-    def __deepcopy__(self, memodict={},**kwargs):
+    def __deepcopy__(self, memodict={}, **kwargs):
         par = Particle(copy.deepcopy(self.weight),copy.deepcopy(self.pose),self.ray_vectors,
                        scan_match_params=self.scan_match_params,map_params=self.map_params,
                        odometry_params=self.odometry_params,obs_params=self.obs_params,**kwargs)

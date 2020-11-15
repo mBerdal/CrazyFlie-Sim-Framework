@@ -33,7 +33,7 @@ class SLAM_map():
         self.max_range = kwargs.get("max_range",10)
 
         self.p_free = kwargs.get("p_free",0.4)
-        self.p_occupied = kwargs.get("p_occupied",0.7)
+        self.p_occupied = kwargs.get("p_occupied",0.8)
         self.p_prior = kwargs.get("p_prior",0.5)
         self.log_free = np.log(self.p_free / (1 - self.p_free))
         self.log_occupied = np.log(self.p_occupied / (1 - self.p_occupied))

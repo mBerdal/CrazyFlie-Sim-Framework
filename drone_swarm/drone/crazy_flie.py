@@ -128,13 +128,13 @@ class CrazyFlieLidar(Drone):
         super().__init__(id, state, sensors, state_noise_generator)
         self.command = np.zeros([6, 1])
 
-        acc_limits_upper_std = np.array([2, 2, 2, np.deg2rad(180), np.deg2rad(180), np.deg2rad(180)]).reshape(6, 1)
+        acc_limits_upper_std = np.array([2, 2, 2, np.deg2rad(360*2), np.deg2rad(360*2), np.deg2rad(360*2)]).reshape(6, 1)
         acc_limits_lower_std = -acc_limits_upper_std
 
         self.acc_limits_lower = kwargs.get("acc_limits_lower", acc_limits_lower_std)
         self.acc_limits_upper = kwargs.get("acc_limits_upper", acc_limits_upper_std)
 
-        self.state_dot_upper = np.array([2, 2, 2, np.deg2rad(270), np.deg2rad(270), np.deg2rad(270)]).reshape(6, 1)
+        self.state_dot_upper = np.array([3, 3, 3, np.deg2rad(360), np.deg2rad(360), np.deg2rad(360)]).reshape(6, 1)
         self.state_dot_lower = -self.state_dot_upper
         # Sensor parameters
         rays = []

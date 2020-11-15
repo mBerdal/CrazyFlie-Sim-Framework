@@ -72,7 +72,7 @@ class SharedMap(Loggable):
         self.center_y = self.base_center_y + self.delta_y[base_id]
 
         self.occ_threshold = np.log(0.7/(1-0.7))
-        self.free_threshold = np.log(0.2/(1-0.2))
+        self.free_threshold = np.log(0.3/(1-0.3))
         self.rays = LidarSensor(np.array([0, 0, 0.1]), np.array([0, 0, 0]), num_rays=180).ray_vectors
         self.max_range = 10
 
@@ -96,7 +96,7 @@ class SharedMap(Loggable):
         cells[self.log_prob_map > self.occ_threshold] = -1
         cells[self.log_prob_map == 0] = 1
 
-        starting_cell = [self.center_x, self.center_y]
+        starting_cell = self.cell_from_coordinate_local_map(self.base_id,self.base_pose)
 
         q = Queue(0)
         q.put(starting_cell)
@@ -256,11 +256,13 @@ class SharedMap(Loggable):
         frontiers_f = []
         for f in self.frontiers:
             if len(f) >= min_frontier_length:
-                frontiers_f.append(np.array(f).T)
+                frontiers_f.append(np.array(f,dtype=np.float).squeeze().T)
         mean = []
         for f in frontiers_f:
             mean_f = np.mean(f,axis=1)
-            mean.append(mean_f)
+            x = np.int(np.floor(mean_f[0]))
+            y = np.int(np.floor(mean_f[1]))
+            mean.append(np.array([x,y],dtype=np.int))
         return mean
 
     def get_observable_cells_from_pos(self, cell_pos, max_range):
@@ -281,7 +283,7 @@ class SharedMap(Loggable):
         occ_grid = np.zeros(self.log_prob_map.shape)
         occ_grid[self.log_prob_map > self.occ_threshold] = -1
         occ_grid[self.log_prob_map < self.free_threshold] = 1
-        if pad != 0:
+        if pad > 0:
             neighbors = [[x, y] for x in range(-pad, pad + 1) for y in range(-pad, pad + 1)]
             occupied_cells_x, occupied_cells_y = np.where(occ_grid == -1)
             for i in range(len(occupied_cells_x)):

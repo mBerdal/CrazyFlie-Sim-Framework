@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from heapq import heappush, heappop
 
 class RRT:
     class Node:
@@ -281,3 +282,147 @@ class RRTStar(RRT):
             if self.nodes_list[i].cost == min_cost:
                 return i
         return None
+
+
+class AStar:
+    def __init__(self, start, target, occ_grid, movement=8):
+        self.occ_grid = occ_grid
+        start_x = np.int(np.floor(start[0]))
+        start_y = np.int(np.floor(start[1]))
+
+        #self.start = np.array([start_x,start_y])
+        self.start = (start_x,start_y)
+        target_x = np.int(np.floor(target[0]))
+        target_y = np.int(np.floor(target[1]))
+        self.target = np.array([target_x,target_y])
+        self.target = (target_x,target_y)
+        self.init_sucsess = True
+        if self.occ_grid[self.start[0],self.start[1]] == -1:
+            self.init_sucsess = False
+
+        if self.occ_grid[self.target[0],self.target[1]] == -1:
+            self.init_sucsess = False
+
+        if movement == 8:
+            self.movements = self.get_movement_8()
+        else:
+            self.movements = self.get_movement_4()
+
+    def planning(self):
+        start_node = (self.distance(self.start, self.target), 0.0, self.start, None)
+
+        front = [start_node]
+        visited = np.zeros(self.occ_grid.shape)
+        came_from = {}
+        while front:
+            elem = heappop(front)
+
+            total_cost, cost, pos, previous = elem
+            if visited[pos[0],pos[1]]:
+                continue
+
+            visited[pos[0],pos[1]] = 1
+
+            came_from[(pos[0],pos[1])] = previous
+            if np.all(pos == self.target):
+                break
+
+            for dx, dy, deltacost in self.movements:
+                new_x = pos[0] + dx
+                new_y = pos[1] + dy
+                new_pos = (new_x, new_y)
+
+                try:
+                    if not visited[new_pos[0],new_pos[1]] and not self.occ_grid[new_pos[0],new_pos[1]] == -1:
+                        new_cost = cost + deltacost
+                        new_estimated_cost_to_goal = new_cost + self.distance(new_pos, self.target)
+                        heappush(front,(new_estimated_cost_to_goal,new_cost,new_pos,pos))
+                except IndexError:
+                    continue
+
+        path = []
+        if np.all(pos == self.target):
+            while pos is not None:
+                path.append(pos)
+                pos = came_from[(pos[0],pos[1])]
+            path = [np.array([x[0],x[1]]).reshape(2,1) for x in path]
+            path = self.get_path_to_target(path)
+            return path
+        else:
+            return None
+
+    def check_collision(self, start, end):
+        ray = (end - start)
+        ray = ray / np.linalg.norm(ray)
+
+        step_x = 1 if ray[0] >= 0 else -1
+        step_y = 1 if ray[1] >= 0 else -1
+
+        current_cell = start.copy()
+
+        next_cell_boundary_x = (current_cell[0] + step_x)
+        next_cell_boundary_y = (current_cell[1] + step_y)
+
+        tmax_x = (next_cell_boundary_x - start[0]) / ray[0] if ray[0] != 0 else np.inf
+        tmax_y = (next_cell_boundary_y - start[1]) / ray[1] if ray[1] != 0 else np.inf
+
+        tdelta_x = 1 / ray[0] * step_x if ray[0] != 0 else np.inf
+        tdelta_y = 1 / ray[1] * step_y if ray[1] != 0 else np.inf
+
+        while np.any(current_cell != end):
+            if tmax_x <= tmax_y:
+                current_cell[0] += step_x
+                tmax_x += tdelta_x
+            else:
+                current_cell[1] += step_y
+                tmax_y += tdelta_y
+            if self.occ_grid[current_cell[0], current_cell[1]] == -1:
+                return True
+        return False
+
+    def get_path_to_target(self, path):
+        wps = [path[0]]
+        current_node = path[1]
+        prev_node = path[0]
+        i = 0
+        c = 2
+        while c < len(path):
+            if not self.check_collision(wps[i], current_node):
+                prev_node = current_node
+                current_node = path[c]
+                c += 1
+            else:
+                wps.append(prev_node)
+                i += 1
+            if i > 100:
+                return None
+        wps.reverse()
+        dist_list = [np.array([self.start[0],self.start[1]]).reshape(2,1)]
+        for wp in wps:
+            dist_list.append(wp)
+        dist = sum([np.linalg.norm(dist_list[i] - dist_list[i+1]) for i in range(len(dist_list)-1)])
+        return wps, dist
+
+    def distance(self, start, target):
+        return np.sqrt((target[0]-start[0])**2 + (target[1]-start[1])**2)
+
+    def get_movement_8(self):
+        sqrt2 = np.sqrt(2)
+        return [
+            (1,0,1),
+            (0,1,1),
+            (-1,0,1),
+            (0,-1,1),
+            (1,1,sqrt2),
+            (1,-1,sqrt2),
+            (-1,1,sqrt2),
+            (-1,-1,sqrt2)
+        ]
+
+    def get_movement_4(self):
+        return [
+            (1,0,1),
+            (0,1,1),
+            (-1,0,1),
+            (0,-1,1)
+        ]
