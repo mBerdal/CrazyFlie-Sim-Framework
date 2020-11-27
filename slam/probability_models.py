@@ -4,6 +4,7 @@ from scipy.stats import norm
 from scipy.signal import convolve2d
 from utils.rotation_utils import ssa, rot_matrix_2d
 from utils.misc import gaussian_kernel_2d
+from math import floor
 
 class ProbModel(ABC):
 
@@ -74,7 +75,7 @@ class OdometryModel(ProbModel):
 
 
 class ObservationModel:
-    def __init__(self, ray_vectors,**kwargs):
+    def __init__(self, ray_vectors, **kwargs):
         self.ray_vectors = ray_vectors
         self.skip_rays = kwargs.get("skip_rays",4)
         self.ray_vectors = self.ray_vectors[:,0::self.skip_rays]
@@ -105,13 +106,29 @@ class ObservationModel:
                 continue
             else:
                 end_point = pose[0:2] + rays[:, ind] * meas
-            cell_x = np.int(np.floor((end_point[0] - self.lower_x) / self.map_res))
-            cell_y = np.int(np.floor((end_point[1] - self.lower_y) / self.map_res))
-            try:
-                q = q*(self.like_field[cell_x, cell_y] + self.eps)
-            except:
-                pass
+            cell_x = int(floor((end_point[0] - self.lower_x) / self.map_res))
+            cell_y = int(floor((end_point[1] - self.lower_y) / self.map_res))
+
+            if cell_x < 0 or cell_x >= self.size_x or cell_y < 0 or cell_y >= self.size_y:
+                continue
+            q = q*(self.like_field[cell_x, cell_y] + self.eps)
         return q
+
+    def likelihood_vectorized(self, pose, measurements):
+        pose = pose.squeeze().reshape(3,1)
+        rays = rot_matrix_2d(pose[2]) @ self.ray_vectors[0:2, :]
+        measurements = measurements[0::self.skip_rays]
+
+        end_point = pose[0:2] + np.multiply(rays,measurements)
+        cells_x = np.floor((end_point[0,:]-self.lower_x)/self.map_res)
+        cells_y = np.floor((end_point[1,:]-self.lower_y)/self.map_res)
+
+        unvalid_ind = ~((cells_x < 0) | (cells_x >= self.size_x) | (cells_y < 0) | (cells_x >= self.size_y))
+
+        cells_x = cells_x[unvalid_ind].astype(int)
+        cells_y = cells_y[unvalid_ind].astype(int)
+        likelihood = self.like_field[cells_x,cells_y]
+        return np.prod(likelihood + self.eps)
 
     def compute_likelihood_field(self, initial_pose, map):
         lower_x = np.int(
@@ -140,6 +157,8 @@ class ObservationModel:
         self.lower_x = (lower_x - map.center_x) * map.res
         self.lower_y = (lower_y - map.center_y) * map.res
         self.map_res = map.res
+        self.size_x = like_field.shape[0]
+        self.size_y = like_field.shape[1]
 
     def compute_likelihood_field_dist(self,initial_pose,map):
         lower_x = np.int(

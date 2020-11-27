@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-class Simulator():
+class Simulator:
 
     def __init__(self, **kwargs) -> None:
         self.log_to_file = kwargs.get("log_to_file", None)

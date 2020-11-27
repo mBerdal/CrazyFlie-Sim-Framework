@@ -5,7 +5,7 @@ from utils.rotation_utils import ssa
 import numpy as np
 import matplotlib.pyplot as plt
 import copy
-from slam.icp import icp
+from sklearn.neighbors import NearestNeighbors
 
 
 class Particle:
@@ -20,14 +20,12 @@ class Particle:
         self.motion_model = OdometryModel(**odometry_params)
         self.observation_model = ObservationModel(self.ray_vectors, **obs_params)
 
-        self.num_samples = kwargs.get("num_samples", 40)
-        self.eps = kwargs.get("eps",np.array([0.1,0.1,0.05]).reshape(3,1))
-
         self.map_params = map_params
         self.scan_match_params = scan_match_params
         self.odometry_params = odometry_params
         self.obs_params = obs_params
         self.min_diff = kwargs.get("min_diff",2.0)
+
         self.translation_sample = np.linspace(-0.05,0.05,5)
         self.angular_sample = np.linspace(-np.deg2rad(3),np.deg2rad(3),5)
         self.trajectory = [initial_pose.copy()]
@@ -36,10 +34,6 @@ class Particle:
 
     def update_particle(self, measurements, odometry):
         odometry_pose = self.odometry_update(odometry)
-        #if self.previous_points is not None:
-        #    points = self.ray_vectors[0:2,:]*measurements + odometry_pose[0:2]
-        #    points = points[~np.any(np.isinf(points), axis=1)]
-        #    translation = icp(self.previous_points.T,points.T)
         scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
         samples = []
         for x in self.translation_sample:
@@ -55,10 +49,12 @@ class Particle:
 
         self.observation_model.compute_likelihood_field(scan_pose,self.map)
 
+        likelihoods = []
         for s in samples:
-            l_obs = self.observation_model.likelihood(s, measurements)
+            l_obs = self.observation_model.likelihood_vectorized(s, measurements)
             l_mot = self.motion_model.likelihood(s, self.pose, odometry)
             likelihood = l_obs*l_mot
+            likelihoods.append(likelihood)
             mean[0:2] += s[0:2]*likelihood
             mean[2] += ssa(s[2],0)*likelihood
             normalizer += likelihood
@@ -71,11 +67,9 @@ class Particle:
             mean = mean/(normalizer+1e-200)
         covariance = np.zeros([3,3])
 
-        for s in samples:
-            likelihood = self.observation_model.likelihood(s, measurements) * self.motion_model.likelihood(
-                s, self.pose, odometry)
+        for (i, s) in enumerate(samples):
             diff = diff_covariance(s,mean)
-            covariance += diff*diff.transpose()*likelihood
+            covariance += diff*diff.transpose()*likelihoods[i]
         try:
             covariance = covariance/(normalizer)
         except:
@@ -97,7 +91,8 @@ class Particle:
         self.pose = pose
         self.map.integrate_scan(pose, measurements, self.ray_vectors)
         self.trajectory.append(self.pose.copy())
-        self.previous_points = self.ray_vectors[0:2,:] * measurements + self.pose[0:2]
+        previous_points = self.ray_vectors[0:2,:] * measurements + self.pose[0:2]
+        self.previous_points = previous_points[:,~np.any(np.isinf(previous_points), axis=0)]
         #q.put(self)
 
     def update_weight(self, weight):
@@ -115,7 +110,7 @@ class Particle:
         return pose
 
     def __deepcopy__(self, memodict={}, **kwargs):
-        par = Particle(copy.deepcopy(self.weight),copy.deepcopy(self.pose),self.ray_vectors,
+        par = Particle(copy.deepcopy(self.weight),copy.deepcopy(self.pose), self.ray_vectors,
                        scan_match_params=self.scan_match_params,map_params=self.map_params,
                        odometry_params=self.odometry_params,obs_params=self.obs_params,**kwargs)
         par.map = self.map.__deepcopy__()

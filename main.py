@@ -109,9 +109,10 @@ initial_pose_3 = np.array([x,y+1,yaw],dtype=float).reshape(3,1)
 rays = drone1.sensors[0].ray_vectors
 
 if __name__ == "__main__":
-    c = SwarmExplorationController([drone1, drone2, drone3],[initial_pose_1, initial_pose_2, initial_pose_3], rays,visualize=True, num_particles=5)
-    s = Simulator(environment=env, drones=[drone1, drone2, drone3], controller=c, com_delay=0.1, log_to_file="logs/test_lidar_a.json",
-                  env_to_file="logs/env_test_4.json", con_to_file="logs/controller5.json",slam_to_file="logs/slam5.json",
-                  shared_map_to_file="logs/shared_map5.json")
-    s.simulate(0.05, 100)
-    s.visualize()
+    c = SwarmExplorationController([drone1, drone2],[initial_pose_1, initial_pose_2], rays,
+                                   visualize=True, num_particles=5, assignment_method="optimized")
+    s = Simulator(environment=env, drones=[drone1, drone2], controller=c, com_delay=0.1, log_to_file="logs/test_lidar_a.json",
+                  env_to_file="logs/env_test_4.json", con_to_file="logs/controller8.json",slam_to_file="logs/slam8.json",
+                  shared_map_to_file="logs/shared_map8.json")
+    s.simulate(0.05, 150)
+    #s.visualize()

@@ -290,7 +290,6 @@ class AStar:
         start_x = np.int(np.floor(start[0]))
         start_y = np.int(np.floor(start[1]))
 
-        #self.start = np.array([start_x,start_y])
         self.start = (start_x,start_y)
         target_x = np.int(np.floor(target[0]))
         target_y = np.int(np.floor(target[1]))
@@ -313,6 +312,8 @@ class AStar:
 
         front = [start_node]
         visited = np.zeros(self.occ_grid.shape)
+        n = self.occ_grid.shape[0]
+        m = self.occ_grid.shape[1]
         came_from = {}
         while front:
             elem = heappop(front)
@@ -332,13 +333,13 @@ class AStar:
                 new_y = pos[1] + dy
                 new_pos = (new_x, new_y)
 
-                try:
-                    if not visited[new_pos[0],new_pos[1]] and not self.occ_grid[new_pos[0],new_pos[1]] == -1:
-                        new_cost = cost + deltacost
-                        new_estimated_cost_to_goal = new_cost + self.distance(new_pos, self.target)
-                        heappush(front,(new_estimated_cost_to_goal,new_cost,new_pos,pos))
-                except IndexError:
+                if new_x < 0 or new_x >= n or new_y < 0 or new_y >= m:
                     continue
+
+                if not visited[new_pos[0],new_pos[1]] and not self.occ_grid[new_pos[0],new_pos[1]] == -1:
+                    new_cost = cost + deltacost
+                    new_estimated_cost_to_goal = new_cost + self.distance(new_pos, self.target)
+                    heappush(front,(new_estimated_cost_to_goal,new_cost,new_pos,pos))
 
         path = []
         if np.all(pos == self.target):
@@ -386,16 +387,31 @@ class AStar:
         prev_node = path[0]
         i = 0
         c = 2
+        t = 0
+        just_updated = False
         while c < len(path):
-            if not self.check_collision(wps[i], current_node):
+            if not self.check_collision(wps[i], current_node) and t < 40:
                 prev_node = current_node
                 current_node = path[c]
+                just_updated = False
                 c += 1
+                t += 1
             else:
-                wps.append(prev_node)
-                i += 1
-            if i > 100:
-                return None
+                if not just_updated:
+                    wps.append(prev_node)
+                    just_updated = True
+                    i += 1
+                    t = 0
+                else:
+                    dx = current_node[0]-prev_node[0]
+                    dy = current_node[1]-prev_node[1]
+
+                    if self.occ_grid[prev_node[0]+dx,prev_node[1]] != -1:
+                        current_node[0] = prev_node[0]+dx
+                        current_node[1] = prev_node[1]
+                    elif self.occ_grid[prev_node[0],prev_node[1]+dy] != -1:
+                        current_node[0] = prev_node[0]
+                        current_node[1] = prev_node[1]+dy
         wps.reverse()
         dist_list = [np.array([self.start[0],self.start[1]]).reshape(2,1)]
         for wp in wps:
@@ -426,3 +442,10 @@ class AStar:
             (-1,0,1),
             (0,-1,1)
         ]
+
+    def visualize_visited(self, visited):
+        plt.figure()
+        plt.imshow(visited.T,"greys",origin="lower")
+        plt.figure()
+        plt.imshow(self.occ_grid.T,"greys",origin="lower")
+        plt.show()

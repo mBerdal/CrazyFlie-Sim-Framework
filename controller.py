@@ -65,43 +65,19 @@ class DroneController(Controller, Loggable):
         wp = self.get_waypoint(self.estimated_pose)
 
         if self.state == "idle":
-            #self.velocity_controller.update_set_point(0)
-            u_output = 0
-            r_output = 0
+            self.velocity_controller.update_set_point(0)
+            self.yaw_controller.update_set_point(0)
         elif self.state == "active":
-            """
-            update_avoidance = (self.time_counter >= self.time_rate_collision_avoidance or self.update_flag)
-            if update_avoidance:
-                err_x = wp[0] - self.estimated_pose[0]
-                err_y = wp[1] - self.estimated_pose[1]
-
-                dist_err = np.sqrt(err_x ** 2 + err_y ** 2)
-                velocity_d = np.clip(self.velocity_gain * dist_err, -self.sat["velocity"], self.sat["velocity"])
-
-                #distance_grid = slammer.get_occupancy_grid(np.ceil(velocity_d*5))
-                velocity = states[6]
-
-                #self.avoid_controller.update_velocity_commands(np.array([0.5, 1]) * velocity_d)
-
-                #heading_d, vel_d = self.avoid_controller.collision_avoidance(self.estimated_pose.copy(), velocity, distance_grid, wp)
-
-                heading_d = np.arctan2(err_y,err_x) % (2*np.pi)
-
-                self.heading_controller.update_set_point(heading_d)
-                self.velocity_controller.update_set_point(velocity_d)
-
-                self.reset_time_counter()
-                self.increment_timer(time_step)
+            update = ((self.time_counter % 0.10) - ((self.time_counter - time_step) % 0.10) < 0)
+            if update:
+                distance_grid = slammer.get_occupancy_grid(np.ceil(2))
+                x = np.zeros([5,1])
+                x[0:3] = self.estimated_pose[:]
+                x[3:] = states[[6,11]]
+                output = self.avoid_controller.calc_control(x,wp,distance_grid)
+                self.velocity_controller.update_set_point(output[0])
+                self.yaw_controller.update_set_point(output[1])
                 self.update_flag = False
-            """
-            distance_grid = slammer.get_occupancy_grid(np.ceil(2))
-            x = np.zeros([5,1])
-            x[0:3] = self.estimated_pose[:]
-            x[3:] = states[[6,11]]
-            output = self.avoid_controller.calc_control(x,wp,distance_grid)
-            self.velocity_controller.update_set_point(output[0])
-            self.yaw_controller.update_set_point(output[1])
-            self.update_flag = False
 
         self.prev_odometry = odometry_data
 
@@ -114,6 +90,7 @@ class DroneController(Controller, Loggable):
 
     def odometry_update(self, current, prev):
         diff = np.zeros([3,1])
+
         diff[0:2] = (current[0:2] - prev[0:2]).reshape(2,1)
         diff[2] = ssa(current[2],prev[2])
         pose = np.zeros([3,1])
@@ -315,31 +292,33 @@ class SwarmController(Controller,Loggable):
 
 class SwarmExplorationController(Controller, Loggable):
 
-    def __init__(self, drones, initial_poses, rays,**kwargs):
+    def __init__(self, drones, initial_poses, rays, **kwargs):
         self.ids = []
         self.simulation_callback = None
         self.controllers = {}
         self.slammers = {}
-        self.planner = Planner()
+        assignment_method = kwargs.get("assignment_method", "optimized")
+        self.planner = Planner(assignment_method=assignment_method)
         self.initial_poses = initial_poses
 
         self.num_particles=kwargs.get("num_particles", 5)
         self.calibration_time = kwargs.get("calibration_time", 2.0)
-        self.replanning_interval = kwargs.get("replanning_interval", 0.2)
+        self.replanning_interval = kwargs.get("replanning_interval", 0.5)
 
         for ind, d in enumerate(drones):
             self.ids.append(d.id)
             self.controllers[d.id] = DroneController(d.id)
             self.slammers[d.id] = Slammer(d.id, self.num_particles, rays, initial_pose=initial_poses[ind].copy())
         initial_poses = [initial_poses[0] for _ in initial_poses]
+
         self.shared_map = SharedMap(self.ids[0], self.get_all_maps(), initial_poses)
         self.time_counter = 0
         self.time_last_update_wps = 0
-        self.wait_time_update_wps = 2
+        self.wait_time_update_wps = kwargs.get("wait_time_update_wps", 2)
         self.padding_occ_grid = 2
 
-        self.visualize = kwargs.get("visualize",True)
-        self.visualize_interval = kwargs.get("visualize_interval",0.2)
+        self.visualize = kwargs.get("visualize", True)
+        self.visualize_interval = kwargs.get("visualize_interval", 1.0)
         if self.visualize:
             self.init_plot()
 
@@ -356,17 +335,7 @@ class SwarmExplorationController(Controller, Loggable):
         calibration_ended = self.time_counter >= self.calibration_time
 
         if update_cooldown and idle_drones and calibration_ended :
-            print("Assigning frontiers")
-            self.time_last_update_wps = self.time_counter
-            self.shared_map.merge_map(self.get_all_maps())
-            wps = self.planner.assign_waypoints_exploration(self.get_drones(),self.shared_map)
-            for i in wps.keys():
-                wp = [self.shared_map.coordinate_from_cell_local_map(i, w) for w in wps[i]]
-                self.controllers[i].reset_waypoints()
-                self.controllers[i].add_waypoints(wp)
-
-            if self.check_all_drones_idle() and self.simulation_callback is not None:
-                self.simulation_callback()
+            self.assign_frontiers()
 
         replan = ((self.time_counter % self.replanning_interval) - ((self.time_counter - time_step) % self.replanning_interval)) < 0
 
@@ -400,7 +369,7 @@ class SwarmExplorationController(Controller, Loggable):
             collision = self.shared_map.check_collision(cell_drone, cell_wp)
 
             if collision:
-                print("Replanning ID:",key)
+                print("Replanning ID:", key)
                 target = self.controllers[key].get_end_wp()
                 cell_target = self.shared_map.cell_from_coordinate_local_map(key, target)
                 #r = RRTStar(cell_drone, cell_target, occ_grid, free_cells)
@@ -416,6 +385,19 @@ class SwarmExplorationController(Controller, Loggable):
                     self.controllers[key].add_waypoints(wp)
                 else:
                     self.controllers[key].reset_waypoints()
+
+    def assign_frontiers(self):
+        print("Assigning frontiers")
+        self.time_last_update_wps = self.time_counter
+        self.shared_map.merge_map(self.get_all_maps())
+        wps = self.planner.assign_waypoints(self.get_drones(), self.shared_map)
+        for i in wps.keys():
+            wp = [self.shared_map.coordinate_from_cell_local_map(i, w) for w in wps[i]]
+            self.controllers[i].reset_waypoints()
+            self.controllers[i].add_waypoints(wp)
+
+        if self.check_all_drones_idle() and self.simulation_callback is not None:
+            self.simulation_callback()
 
     def set_simulation_callback(self, callback):
         self.simulation_callback = callback

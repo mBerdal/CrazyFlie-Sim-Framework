@@ -1,16 +1,10 @@
 import numpy as np
-from math import sin, cos
-import time
 import copy
-import matplotlib.pyplot as plt
-from logger.logger import Logger
-from sensor.lidar_sensor import LidarSensor
-from matplotlib.animation import FuncAnimation
-from matplotlib import animation
 from utils.rotation_utils import rot_matrix_2d
-from queue import Queue
+from math import floor
 
-class SLAM_map():
+
+class SLAM_map:
     """
     Class for tracking a single SLAM map. The map uses occupancy grid representation of the environment. The cells are
     updated based on probabilistic model.
@@ -21,8 +15,6 @@ class SLAM_map():
          res: size of each cell [m]
          prior: the prior probability of a cell being occupied [0,1]
          grid: numpy array representing the probability of the cell being occupied [np.array(x,y)]
-
-
     """
 
     def __init__(self, **kwargs):
@@ -39,16 +31,16 @@ class SLAM_map():
         self.log_occupied = np.log(self.p_occupied / (1 - self.p_occupied))
         self.log_prior = np.log(self.p_prior / (1 - self.p_prior))
 
-        self.center_x = np.int(self.size_x/2)
-        self.center_y = np.int(self.size_y/2)
+        self.center_x = int(floor(self.size_x/2))
+        self.center_y = int(floor(self.size_y/2))
 
         self.log_prob_map = np.ones((self.size_x, self.size_y),dtype=np.float32)*self.log_prior
 
     def integrate_scan(self, pose, measurments, ray_vectors):
-        ray_vectors = rot_matrix_2d(pose[2]) @ ray_vectors[0:2,:]
+        ray_vectors = rot_matrix_2d(pose[2]) @ ray_vectors[0:2, :]
         for i in range(measurments.size):
             meas = measurments[i]
-            ray = ray_vectors[0:2,i].reshape(2,1)
+            ray = ray_vectors[0:2, i].reshape(2,1)
             if meas == np.inf:
                 end_point = pose[0:2] + ray * self.max_range
             else:
@@ -56,19 +48,17 @@ class SLAM_map():
 
             end_point_cell = self.world_coordinate_to_grid_cell(end_point)
             if meas != np.inf:
-                try:
+                if not (end_point_cell[0] < 0 or end_point_cell[0] > self.size_x or end_point_cell[1] < 0 or end_point_cell[1] >= self.size_y):
                     self.log_prob_map[end_point_cell[0],end_point_cell[1]] += self.log_occupied
-                except:
-                    pass
             free_cells = self.grid_traversal(pose[0:2], end_point)
             for cell in free_cells:
-                try:
+                if not (cell[0] < 0 or cell[0] > self.size_x or cell[1] < 0 or cell[1] >= self.size_y):
+                    if cell[0] == end_point_cell[0] and cell[1] == end_point_cell[1]:
+                        print("Error grid traversal")
                     self.log_prob_map[cell[0],cell[1]] += self.log_free
-                except:
-                    pass
 
     def world_coordinate_to_grid_cell(self,coord):
-        cell = np.array([np.int(np.floor(coord[0]/self.res)) + self.center_x, np.int(np.floor(coord[1]/self.res))+self.center_y])
+        cell = np.array([int(floor(coord[0]/self.res)) + self.center_x, int(floor(coord[1]/self.res))+self.center_y])
         return cell
 
     def cell_in_grid(self, cell):
@@ -95,17 +85,17 @@ class SLAM_map():
 
         neg_ray = False
         diff = np.zeros(2,np.int)
-        if current_cell[0] != last_cell[0] and ray[0]<0:
+        if current_cell[0] != last_cell[0] and ray[0] < 0:
             diff[0] -= 1
             neg_ray = True
-        if current_cell[1] != last_cell[1] and ray[1]<0:
+        if current_cell[1] != last_cell[1] and ray[1] < 0:
             diff[1] -= 1
             neg_ray = True
         if neg_ray:
             visited_cells.append(current_cell.copy())
             current_cell += diff
 
-        while np.any(current_cell != last_cell):
+        while current_cell[0] != last_cell[0] or current_cell[1] != last_cell[1]:
             visited_cells.append(current_cell.copy())
             if tmaxX <= tmaxY:
                 current_cell[0] += stepX
@@ -133,24 +123,3 @@ class SLAM_map():
         m = SLAM_map(size_x=self.size_x,size_y=self.size_y,res=self.res)
         m.log_prob_map = copy.deepcopy(self.log_prob_map)
         return m
-
-
-
-
-
-
-def test():
-    map1 = SLAM_map(size_x=500,size_y=200)
-    map1.log_prob_map = np.random.rand(map1.size_x,map1.size_y)
-    map2 = SLAM_map()
-    map2.log_prob_map = np.random.rand(map2.size_x,map2.size_y) + 2
-    maps = [map1,map2]
-    initial_poses = [np.array([0,0,0]),np.array([1,-10,0])]
-    merge_map = MapMultiRobot(maps, initial_poses)
-    merge_map.merge_map(maps)
-    plt.figure()
-    plt.imshow(merge_map.log_prob_map.transpose(), origin="lower")
-    plt.show()
-
-if __name__ == "__main__":
-    test()

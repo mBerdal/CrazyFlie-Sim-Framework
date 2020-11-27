@@ -22,7 +22,7 @@ scan_match_params = {
         "step": 1,
         "sigma": 0.1,
         "max_sensor_range": 10,
-        "skip_rays": 6,
+        "skip_rays": 1,
     }
 
 odometry_params = {
@@ -36,5 +36,5 @@ obs_params = {
     "sigma": 0.10,
     "occ_threshold": 0.7,
     "max_sensor_range": 10,
-    "skip_rays": 6
+    "skip_rays": 1
 }

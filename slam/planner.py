@@ -5,24 +5,24 @@ import pyomo.environ as pe
 class Planner:
 
     def __init__(self, **kwargs):
-
-        self.max_iter_rrt = kwargs.get("max_iter_rrt", 100)
         self.min_len_frontier = kwargs.get("min_len_frontier", 10)
-        self.padding_occ_grid = kwargs.get("padding_occ_grid", 2)
-        self.max_range = kwargs.get("max_range",4)
-        self.beta = 1
+        self.padding_occ_grid = kwargs.get("padding_occ_grid", 3)
+        self.max_range_observable = kwargs.get("max_range_observable",4)
+        self.max_range_vis = kwargs.get("max_range_discount", 10)
+        self.assignment_method = kwargs.get("assignment_method","optimized")
 
-    def assign_waypoints_exploration(self, drones, shared_map):
+    def assign_waypoints(self, drones, shared_map):
         shared_map.compute_frontiers()
         shared_map.compute_occupancy_grid()
         points = shared_map.get_frontier_points(self.min_len_frontier)
 
         num_f = len(points)
         num_d = len(drones)
+        print("Number of frontiers:", num_f)
         information_gain = []
         for i in range(len(points)):
             information_gain.append({"point": points[i], "information":
-                len(shared_map.get_observable_cells_from_pos(points[i],max_range=self.max_range))})
+                len(shared_map.get_observable_cells_from_pos(points[i],max_range=self.max_range_observable))})
 
         dist = {}
         occ_grid = shared_map.get_occupancy_grid(pad=self.padding_occ_grid)
@@ -56,7 +56,16 @@ class Planner:
             for j in range(num_d):
                 utility[i, j] = self.utility_function(information_gain[i]["information"], dist[i][drone_ids[j]]["dist"])
 
-        result = self.optimize_assignment(num_f, num_d, utility, p_vis)
+        if self.assignment_method == "optimized":
+            result = self.optimize_assignment(num_f, num_d, utility, p_vis)
+        elif self.assignment_method == "greedy":
+            result = self.greedy_assingment(num_f,num_d,utility,p_vis)
+        else:
+            distance = np.zeros([num_f,num_d])
+            for i in range(num_f):
+                for j in range(num_d):
+                    distance[i,j] = dist[i][drone_ids[j]]["dist"]
+            result = self.closest_assignment(num_f, num_d, distance)
 
         assignment = {}
         for j in range(num_d):
@@ -68,14 +77,14 @@ class Planner:
         return assignment
 
     def compute_visibility_probability(self, point1, point2, shared_map):
-        if shared_map.check_collision(point1,point2):
+        if shared_map.check_collision(point1, point2):
             return 0
         dist = shared_map.res*np.linalg.norm(point1-point2)
 
-        if dist > self.max_range:
+        if dist > self.max_range_vis:
             return 0
         else:
-            return 1 - dist/self.max_range
+            return 1 - dist/self.max_range_vis
 
     def utility_function(self, information, distance):
         return information/distance
@@ -106,7 +115,6 @@ class Planner:
             d = 0
             for k in model.n:
                 d += model.P[i, k]*sum(model.z[k,:])
-            #discount = max(1-d,0)
             return model.D[i] == (1-d)
 
         model.d_constraint = pe.Constraint(model.n, rule=discount_rule)
@@ -130,6 +138,7 @@ class Planner:
 
         model.obj = pe.Objective(rule=objective,sense=pe.maximize)
 
+        print("Optimizing Assignment")
         opt = pe.SolverFactory('gurobi',solver_io="python")
         opt.solve(model)
 
@@ -137,4 +146,30 @@ class Planner:
         for i in range(num_f):
             for j in range(num_d):
                 assignment[i,j] = pe.value(model.z[i+1,j+1])
+        return assignment
+
+    def greedy_assingment(self, num_f, num_d, utility, p_vis):
+
+        assignment = np.zeros([num_f, num_d])
+        j = 0
+        discount = np.ones([num_f,1])
+        cur_utility = utility.copy()
+        while j < num_d:
+            ind = np.unravel_index(np.argmax(cur_utility),assignment.shape)
+            assignment[ind[0],ind[1]] = 1
+            utility[ind[0],:] = 0
+            utility[:,ind[1]] = 0
+            for i in range(num_f):
+                discount[i, :] -= p_vis[i, ind[0]]
+                cur_utility[i, :] = utility[i, :]*discount[i, :]
+            j += 1
+        return assignment
+
+    def closest_assignment(self, num_f, num_d, dist):
+        assignment = np.zeros([num_f, num_d])
+        for j in range(num_d):
+            ind = np.argmin(dist[:, j], axis=0)
+            if dist[ind,j] == np.inf:
+                continue
+            assignment[ind, j] = 1
         return assignment

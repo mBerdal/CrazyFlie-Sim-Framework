@@ -1,14 +1,8 @@
-from slam.map import SLAM_map
 import numpy as np
-from queue import Queue
-from slam.map import SLAM_map
-import time
 from scipy.signal import convolve2d
-import matplotlib.pyplot as plt
 from utils.misc import gaussian_kernel_2d
 from utils.rotation_utils import rot_matrix_2d
-from logger.logger import Logger
-from sensor.lidar_sensor import LidarSensor
+from math import floor
 
 class ScanMatcher():
 
@@ -43,7 +37,7 @@ class ScanMatcher():
         step = self.initial_step
         iterations = 0
         current_pose = initial_pose
-        best_score = self.score_scan(rays, meas, current_pose, like_field, lower_x, lower_y, map_res)
+        best_score = self.score_scan_vectorized(rays, meas, current_pose, like_field, lower_x, lower_y, map_res)
         initial_score = best_score
         best_pose = initial_pose
         while iterations < self.max_iterations:
@@ -51,7 +45,7 @@ class ScanMatcher():
             current_score = best_score
             for pet in self.perturbations:
                 tmp_pose = current_pose + step*pet.reshape(3,1)
-                tmp_score = self.score_scan(rays, meas, tmp_pose, like_field, lower_x, lower_y, map_res)
+                tmp_score = self.score_scan_vectorized(rays, meas, tmp_pose, like_field, lower_x, lower_y, map_res)
                 if tmp_score > current_score:
                     current_score = tmp_score
                     best_perturbation = pet
@@ -71,18 +65,39 @@ class ScanMatcher():
         pose = pose.squeeze()
         rays = rot_matrix_2d(pose[2]) @ rays[0:2,0::self.skip_rays]
         measurements = measurements[0::self.skip_rays]
+        n = like_field.shape[0]
+        m = like_field.shape[1]
         for ind, meas in enumerate(measurements):
             if meas == np.inf:
                 continue
             else:
                 end_point = pose[0:2] + rays[:,ind]*meas
-            cell_x = np.int(np.floor((end_point[0] -lower_x)/map_res))
-            cell_y = np.int(np.floor((end_point[1] -lower_y)/map_res))
-            try:
-                q = q+like_field[cell_x, cell_y]
-            except:
-                pass
+            cell_x = int(floor((end_point[0] -lower_x)/map_res))
+            cell_y = int(floor((end_point[1] -lower_y)/map_res))
+
+            if cell_x < 0 or cell_x >= n or cell_y < 0 or cell_y >= m:
+                continue
+            q = q+like_field[cell_x, cell_y]
         return q
+
+    def score_scan_vectorized(self, rays, measurements, pose, like_field, lower_x, lower_y, map_res):
+        n = like_field.shape[0]
+        m = like_field.shape[1]
+
+        pose = pose.squeeze().reshape(3, 1)
+        rays = rot_matrix_2d(pose[2]) @ rays[0:2,0::self.skip_rays]
+        measurements = measurements[0::self.skip_rays]
+
+        end_point = pose[0:2] + np.multiply(rays, measurements)
+        cells_x = np.floor((end_point[0, :] - lower_x) / map_res)
+        cells_y = np.floor((end_point[1, :] - lower_y) / map_res)
+
+        unvalid_ind = ~((cells_x < 0) | (cells_x >= n) | (cells_y < 0) | (cells_x >= m))
+
+        cells_x = cells_x[unvalid_ind].astype(int)
+        cells_y = cells_y[unvalid_ind].astype(int)
+        likelihood = like_field[cells_x, cells_y]
+        return np.sum(likelihood)
 
     def compute_likelihood_field(self, map, initial_pose):
         lower_x = np.int((initial_pose[0] - self.max_sensor_range - self.padding_dist)/map.res) + map.center_x

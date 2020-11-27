@@ -2,6 +2,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.rotation_utils import ssa
+from math import floor
 
 class DynamicWindow:
 
@@ -14,7 +15,7 @@ class DynamicWindow:
         self.max_delta_yaw_rate = 1080 * math.pi / 180.0  # [rad/ss]
         self.v_resolution = 0.05  # [m/s]
         self.yaw_rate_resolution = 2 * math.pi / 180.0  # [rad/s]
-        self.dt = 0.05  # [s] Time tick for motion prediction
+        self.dt = 0.10  # [s] Time tick for motion prediction
         self.predict_time = 2.0  # [s]
         self.to_goal_cost_gain = 5.0
         self.speed_cost_gain = 1.0
@@ -27,12 +28,14 @@ class DynamicWindow:
         """
 
         x = np.array(x_init)
-        trajectory = np.array(x)
-        time = 0
-        while time <= self.predict_time:
+        n = int(self.predict_time/self.dt)
+        trajectory = np.zeros([n, 5])
+        trajectory[0,:] = x.squeeze()
+        i = 1
+        while i < n:
             x = self.motion(x, [v, y])
-            trajectory = np.hstack((trajectory, x))
-            time += self.dt
+            trajectory[i,:] = x.squeeze()
+            i += 1
         return trajectory
 
     def motion(self,x, u):
@@ -84,7 +87,7 @@ class DynamicWindow:
                 trajectory = self.predict_trajectory(state_init, v, y)
                 # calc cost
                 to_goal_cost = self.to_goal_cost_gain * self.calc_to_goal_cost(trajectory, goal)
-                speed_cost = self.speed_cost_gain * (self.max_speed - trajectory[3, -1])
+                speed_cost = self.speed_cost_gain * (self.max_speed - trajectory[-1, 3])
                 ob_cost = self.obstacle_cost_gain * self.calc_obstacle_cost(trajectory, distance_grid)
 
                 final_cost = to_goal_cost + speed_cost + ob_cost
@@ -117,21 +120,19 @@ class DynamicWindow:
         """
         calc obstacle cost inf: collision
         """
-        dist = []
-        for i in range(trajectory.shape[1]):
-            x_cell = np.int(np.floor((trajectory[0,i] - distance_grid["lower_x"]) / distance_grid["res"]))
-            y_cell = np.int(np.floor((trajectory[1,i] - distance_grid["lower_y"]) / distance_grid["res"]))
-            try:
-                distance = distance_grid["grid"][x_cell, y_cell]
-                dist.append(distance)
-            except:
-                pass
-        min_dist = min(dist)
+        n = distance_grid["grid"].shape[0]
+        m = distance_grid["grid"].shape[1]
+        x_cell = np.floor((trajectory[:, 0] - distance_grid["lower_x"]) / distance_grid["res"]).astype(np.int)
+        y_cell = np.floor((trajectory[:, 1] - distance_grid["lower_y"]) / distance_grid["res"]).astype(np.int)
+        valid = ~((x_cell<0) | (x_cell >= n) | (y_cell < 0) | (y_cell >= m))
+        min_dist = np.min(distance_grid["grid"][x_cell[valid],y_cell[valid]])
+        """
         if min_dist < 0.10:
             return 1/min_dist
         min_dist = max(min_dist,0.2)
-        velocity = max(trajectory[3,-1],0.3)
-        return 1.0*velocity / min_dist  # OK
+        velocity = max(trajectory[-1,3],0.3)
+        """
+        return 1.0 / min_dist  # OK
 
 
     def calc_to_goal_cost(self, trajectory, goal):
@@ -139,10 +140,10 @@ class DynamicWindow:
             calc to goal cost with angle difference
         """
 
-        dx = goal[0] - trajectory[0, -1]
-        dy = goal[1] - trajectory[1, -1]
+        dx = goal[0] - trajectory[-1, 0]
+        dy = goal[1] - trajectory[-1, 1]
         error_angle = math.atan2(dy, dx)
-        cost_angle = ssa(error_angle, trajectory[2, -1])
+        cost_angle = ssa(error_angle, trajectory[-1, 2])
         cost = abs(math.atan2(math.sin(cost_angle), math.cos(cost_angle))) #+ math.sqrt(dx**2+dy**2)
         return cost
 
