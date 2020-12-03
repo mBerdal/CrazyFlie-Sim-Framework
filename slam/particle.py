@@ -7,6 +7,13 @@ import matplotlib.pyplot as plt
 import copy
 from sklearn.neighbors import NearestNeighbors
 
+class Node:
+
+    def __init__(self, pos, counter, parent, children=[]):
+        self.pos = pos
+        self.counter = counter
+        self.parent = parent
+        self.children = children
 
 class Particle:
 
@@ -26,15 +33,21 @@ class Particle:
         self.obs_params = obs_params
         self.min_diff = kwargs.get("min_diff",2.0)
 
-        self.translation_sample = np.linspace(-0.05,0.05,5)
-        self.angular_sample = np.linspace(-np.deg2rad(3),np.deg2rad(3),5)
+        self.translation_sample = np.linspace(-0.010,0.010,3)
+        self.angular_sample = np.linspace(-0.005, 0.005, 3)
         self.trajectory = [initial_pose.copy()]
         self.counter = 0
         self.previous_points = None
 
+        self.loop_graph = []
+        self.loop_counter = 1
+        self.loop_graph.append(Node(self.pose[0:2].copy(),0, None))
+        self.min_dist_graph = 2.5
+
     def update_particle(self, measurements, odometry):
         odometry_pose = self.odometry_update(odometry)
         scan_pose, score = self.scan_matcher.scan_match(self.ray_vectors, measurements, odometry_pose, self.map)
+        #print("Diff:",scan_pose.tolist())
         samples = []
         for x in self.translation_sample:
             for y in self.translation_sample:
@@ -43,11 +56,11 @@ class Particle:
                     sample_pose[2] = sample_pose[2] % (2 * np.pi)
                     samples.append(sample_pose)
         mean = np.zeros([3,1])
-        normalizer = 0
-        n_obs = 0
-        n_mot = 0
+        normalizer = 0.0
+        n_obs = 0.0
+        n_mot = 0.0
 
-        self.observation_model.compute_likelihood_field(scan_pose,self.map)
+        self.observation_model.compute_likelihood_field(scan_pose, self.map)
 
         likelihoods = []
         for s in samples:
@@ -61,19 +74,14 @@ class Particle:
             n_obs += l_obs
             n_mot += l_mot
 
-        try:
-            mean = mean/normalizer
-        except:
-            mean = mean/(normalizer+1e-200)
+        mean = mean/normalizer
         covariance = np.zeros([3,3])
 
         for (i, s) in enumerate(samples):
             diff = diff_covariance(s,mean)
             covariance += diff*diff.transpose()*likelihoods[i]
-        try:
-            covariance = covariance/(normalizer)
-        except:
-            covariance = covariance/(normalizer+1e-200)
+
+        covariance = covariance/normalizer
 
         try:
             pose = np.random.multivariate_normal(mean.squeeze(),covariance).reshape(3,1)
@@ -85,18 +93,24 @@ class Particle:
         if self.counter < 3:
             self.counter += 1
             pose = self.pose
-
+        #print("Normalizer:",normalizer)
         pose[2] = pose[2] % (2*np.pi)
 
         self.pose = pose
         self.map.integrate_scan(pose, measurements, self.ray_vectors)
         self.trajectory.append(self.pose.copy())
-        previous_points = self.ray_vectors[0:2,:] * measurements + self.pose[0:2]
-        self.previous_points = previous_points[:,~np.any(np.isinf(previous_points), axis=0)]
-        #q.put(self)
+
+        self.update_loop_graph()
 
     def update_weight(self, weight):
         self.weight = weight
+
+    def update_loop_graph(self):
+        dist = [np.linalg.norm(x.pos-self.pose[0:2]) for x in self.loop_graph]
+        if min(dist) > self.min_dist_graph:
+            self.loop_graph.append(Node(self.pose[0:2].copy(),self.loop_counter,self.loop_counter-1))
+            self.loop_graph[self.loop_counter-1].children.append(self.loop_counter)
+            self.loop_counter += 1
 
     def odometry_update(self, odometry):
         diff = np.zeros([3,1])
@@ -114,8 +128,10 @@ class Particle:
                        scan_match_params=self.scan_match_params,map_params=self.map_params,
                        odometry_params=self.odometry_params,obs_params=self.obs_params,**kwargs)
         par.map = self.map.__deepcopy__()
-        par.trajectory = self.trajectory.copy()
+        par.trajectory = [p.copy() for p in self.trajectory]
         par.counter = self.counter
+        par.loop_counter = self.loop_counter
+        par.loop_graph = [Node(x.pos.copy(),x.counter,x.parent,x.children.copy()) for x in self.loop_graph]
         return par
 
     def init_plot(self, axis):

@@ -5,6 +5,7 @@ from scipy.signal import convolve2d
 from utils.rotation_utils import ssa, rot_matrix_2d
 from utils.misc import gaussian_kernel_2d
 from math import floor
+import matplotlib.pyplot as plt
 
 class ProbModel(ABC):
 
@@ -80,7 +81,7 @@ class ObservationModel:
         self.skip_rays = kwargs.get("skip_rays",4)
         self.ray_vectors = self.ray_vectors[:,0::self.skip_rays]
         self.occ_threshold = kwargs.get("occ_threshold",0.7)
-        self.eps = 0.1
+        self.eps = 0.01
 
         self.like_field = None
         self.lower_x = 0
@@ -90,10 +91,9 @@ class ObservationModel:
         self.sigma = kwargs.get("sigma",0.5)
         self.p_unknown = 0.2
 
-        self.max_sensor_range = kwargs.get("max_sensor_range", 4)
+        self.max_sensor_range = kwargs.get("max_sensor_range", 10)
         self.padding_dist = 2.0
-        self.kernel_size = kwargs.get("kernel_size", 2)
-        self.kernel_var = kwargs.get("kernel_var", 0.3)
+        self.kernel_size = kwargs.get("kernel_size", 3)
         self.kernel = gaussian_kernel_2d(self.kernel_size, self.sigma)
 
     def likelihood(self, pose, measurements):
@@ -116,7 +116,7 @@ class ObservationModel:
 
     def likelihood_vectorized(self, pose, measurements):
         pose = pose.squeeze().reshape(3,1)
-        rays = rot_matrix_2d(pose[2]) @ self.ray_vectors[0:2, :]
+        rays = rot_matrix_2d(pose[2]) @ self.ray_vectors[0:2,:]
         measurements = measurements[0::self.skip_rays]
 
         end_point = pose[0:2] + np.multiply(rays,measurements)
@@ -128,7 +128,7 @@ class ObservationModel:
         cells_x = cells_x[unvalid_ind].astype(int)
         cells_y = cells_y[unvalid_ind].astype(int)
         likelihood = self.like_field[cells_x,cells_y]
-        return np.prod(likelihood + self.eps)
+        return np.sum(likelihood)
 
     def compute_likelihood_field(self, initial_pose, map):
         lower_x = np.int(
@@ -193,9 +193,18 @@ class ObservationModel:
             dist_occupied = np.sqrt((xx - xx[cell_x, cell_y]) ** 2 + (yy - yy[cell_x, cell_y]) ** 2)
             dist_field = np.minimum(dist_field, dist_occupied)
         dist_field = np.exp(-dist_field ** 2 / (2 * self.sigma ** 2)) / (np.sqrt(2 * np.pi))
-        unknown_area = prob_field == 0
-        dist_field[unknown_area] = self.p_unknown
+        unknown_area = (prob_field == 0)
+        #dist_field[unknown_area] = self.p_unknown
         self.like_field = dist_field
         self.lower_x = (lower_x - map.center_x) * map.res
         self.lower_y = (lower_y - map.center_y) * map.res
         self.map_res = map.res
+        self.size_x = dist_field.shape[0]
+        self.size_y = dist_field.shape[1]
+
+    def visualize_likelihood(self,cells_x,cells_y):
+        plt.figure()
+        plt.imshow(self.like_field.T, origin="lower")
+        plt.plot(cells_x,cells_y,"o",markersize=1,color="red")
+        plt.colorbar()
+        plt.show()

@@ -11,7 +11,7 @@ from copy import deepcopy
 
 
 class SharedMap(Loggable):
-    def __init__(self,base_id, maps, initial_poses):
+    def __init__(self, base_id, maps, initial_poses):
         self.min_frontier_length = 20
         self.ids = maps.keys()
         self.base_id = base_id
@@ -73,7 +73,7 @@ class SharedMap(Loggable):
 
         self.occ_threshold = np.log(0.7/(1-0.7))
         self.free_threshold = np.log(0.3/(1-0.3))
-        self.rays = LidarSensor(np.array([0, 0, 0.1]), np.array([0, 0, 0]), num_rays=180).ray_vectors
+        self.rays = LidarSensor(np.array([0, 0, 0.1]), np.array([0, 0, 0]), num_rays=360).ray_vectors
         self.max_range = 10
 
         self.frontiers = None
@@ -193,21 +193,18 @@ class SharedMap(Loggable):
             visited_cells.append(current_cell.copy())
             current_cell += diff
 
-        while np.any(current_cell != last_cell):
-            if self.occ_grid[current_cell[0],current_cell[1]] == 0:
-                visited_cells.append(current_cell.copy())
+        while current_cell[0] != last_cell[0] or current_cell[1] != last_cell[1]:
+            visited_cells.append(current_cell.copy())
             if tmaxX <= tmaxY:
                 current_cell[0] += stepX
                 tmaxX += tdeltaX
             else:
                 current_cell[1] += stepY
                 tmaxY += tdeltaY
-            try:
+            if not (current_cell[0] < 0 or current_cell[0] >= self.size_x_merged or current_cell[1] < 0 or current_cell[1] >= self.size_x_merged):
                 if self.occ_grid[current_cell[0],current_cell[1]] == -1:
-                    break
-            except IndexError:
-                return []
-        return visited_cells
+                    return visited_cells, current_cell
+        return visited_cells, None
 
     def check_collision(self, start, end):
         ray = (end - start)
@@ -248,7 +245,7 @@ class SharedMap(Loggable):
         y = np.int(np.floor(coordinate[1] / self.res)) + self.center_y + self.delta_y[id]
         return np.array([x,y]).reshape(2,1)
 
-    def convert_log_to_prob(self):
+    def convert_grid_to_prob(self):
         exp_grid = np.exp(self.log_prob_map)
         return exp_grid/(1+exp_grid)
 
@@ -266,18 +263,18 @@ class SharedMap(Loggable):
         return mean
 
     def get_observable_cells_from_pos(self, cell_pos, max_range):
-        observed = np.zeros(self.log_prob_map.shape)
         unknowns = []
+        occupied = []
         cell_pos = cell_pos[0:2].reshape(2, 1)
         for i in range(self.rays.shape[1]):
             ray = self.rays[0:2,i].reshape(2,1)
             end = cell_pos[0:2] + max_range / self.res * ray
-            unknown_cells = self.grid_traversal(cell_pos[0:2], end)
+            unknown_cells, occupied_cell = self.grid_traversal(cell_pos[0:2], end)
             for c in unknown_cells:
-                if observed[c[0],c[1]] == 0:
-                    observed[c[0],c[1]] = 1
-                    unknowns.append(c)
-        return unknowns
+                unknowns.append(c)
+            if occupied_cell is not None:
+                occupied.append(occupied_cell)
+        return unknowns, occupied
 
     def get_occupancy_grid(self, pad=0):
         occ_grid = np.zeros(self.log_prob_map.shape)
@@ -310,19 +307,19 @@ class SharedMap(Loggable):
         return np.array([x,y]).reshape(2,1)
 
     def init_plot(self, axis):
-        im = axis.imshow(self.convert_log_to_prob().transpose(), "Greys", origin="lower",
+        im = axis.imshow(self.convert_grid_to_prob().transpose(), "Greys", origin="lower",
                          extent=[-self.size_x_merged / 2 * self.res, self.size_x_merged / 2 * self.res, -self.size_y_merged / 2 * self.res,
                                  self.size_y_merged / 2 * self.res])
         return im
 
     def update_plot(self, im):
-        im.set_data(self.convert_log_to_prob().transpose())
+        im.set_data(self.convert_grid_to_prob().transpose())
         im.autoscale()
         return im
 
     def visualize(self):
         plt.figure()
-        plt.imshow(self.convert_log_to_prob().transpose(), "Greys", origin="lower",
+        plt.imshow(self.convert_grid_to_prob().transpose(), "Greys", origin="lower",
                    extent=[-self.size_x_merged / 2 * self.res, self.size_x_merged / 2 * self.res, -self.size_y_merged / 2 * self.res,
                                  self.size_y_merged / 2 * self.res])
         plt.show()

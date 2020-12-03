@@ -9,12 +9,6 @@ class SLAM_map:
     Class for tracking a single SLAM map. The map uses occupancy grid representation of the environment. The cells are
     updated based on probabilistic model.
 
-    Attributes:
-         size_x: size of map in X-direction [m]
-         size_y: size of map in Y-direction [m]
-         res: size of each cell [m]
-         prior: the prior probability of a cell being occupied [0,1]
-         grid: numpy array representing the probability of the cell being occupied [np.array(x,y)]
     """
 
     def __init__(self, **kwargs):
@@ -25,7 +19,7 @@ class SLAM_map:
         self.max_range = kwargs.get("max_range",10)
 
         self.p_free = kwargs.get("p_free",0.4)
-        self.p_occupied = kwargs.get("p_occupied",0.8)
+        self.p_occupied = kwargs.get("p_occupied",0.7)
         self.p_prior = kwargs.get("p_prior",0.5)
         self.log_free = np.log(self.p_free / (1 - self.p_free))
         self.log_occupied = np.log(self.p_occupied / (1 - self.p_occupied))
@@ -52,9 +46,7 @@ class SLAM_map:
                     self.log_prob_map[end_point_cell[0],end_point_cell[1]] += self.log_occupied
             free_cells = self.grid_traversal(pose[0:2], end_point)
             for cell in free_cells:
-                if not (cell[0] < 0 or cell[0] > self.size_x or cell[1] < 0 or cell[1] >= self.size_y):
-                    if cell[0] == end_point_cell[0] and cell[1] == end_point_cell[1]:
-                        print("Error grid traversal")
+                if not (cell[0] < 0 or cell[0] >= self.size_x or cell[1] < 0 or cell[1] >= self.size_y):
                     self.log_prob_map[cell[0],cell[1]] += self.log_free
 
     def world_coordinate_to_grid_cell(self,coord):
@@ -106,7 +98,7 @@ class SLAM_map:
         return visited_cells
 
     def convert_grid_to_prob(self):
-        exp_grid = np.exp(self.log_prob_map)
+        exp_grid = np.exp(np.clip(self.log_prob_map,-10,10))
         return exp_grid/(1+exp_grid)
 
     def init_plot(self, axis):

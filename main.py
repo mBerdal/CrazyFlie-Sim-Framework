@@ -14,7 +14,7 @@ corner1 = [np.array([-15,-15,0]),
            np.array([15,-15,0]),
            np.array([-15,15,0]),
            np.array([-15,-10,0]),
-           np.array([-10,-12,0]),
+           np.array([-10,-11.5,0]),
            np.array([-10,-15,0]),
            np.array([-15,-3,0]),
            np.array([-10,-6,0]),
@@ -53,12 +53,12 @@ corner2 = [np.array([-15+w,15,h]),
            np.array([15-w,15,h]),
            np.array([15,15-w,h]),
            np.array([-10,-10+w,h]),
-           np.array([-10-w,-7,h]),
+           np.array([-10-w,-7.5,h]),
            np.array([-10-w,-13,h]),
            np.array([-10,-3+w,h]),
            np.array([-10-w,2,h]),
            np.array([-8,2+w,h]),
-           np.array([-8,5+w,h]),
+           np.array([-8.5,5+w,h]),
            #np.array([-5+w,-11,h]),
            np.array([6,-10+w,h]),
            np.array([10+w,-11,h]),
@@ -69,9 +69,9 @@ corner2 = [np.array([-15+w,15,h]),
            np.array([3,0+w,h]),
            np.array([3+w,-7,h]),
            np.array([0,-7+w,h]),
-           np.array([12-w,0,h]),
+           np.array([12-w,-0.5,h]),
            np.array([12-w,5,h]),
-           np.array([-12,10+w,h]),
+           np.array([-12.5,10+w,h]),
            np.array([-5,10+w,h]),
            np.array([-5-w,5,h]),
            np.array([-5,5+w,h]),
@@ -81,7 +81,7 @@ corner2 = [np.array([-15+w,15,h]),
            np.array([15,8+w,h]),
            np.array([15,12+w,h]),
            np.array([15,-8+w,h]),
-           np.array([1,-7+w,h])
+           np.array([1.5,-7+w,h])
 
            ]
 
@@ -93,14 +93,14 @@ for i in range(len(corner1)):
         o = Obstacle("rectangle",o)
         env.add_obstacle(o)
 
-x = -8
-y = -5
+x = -13
+y = 13
 z = 0.1
 yaw = 0
 
-drone1 = CrazyFlieLidar(0,np.array([x,y,z,0,0,yaw]).reshape(6,1),num_beams_sensor=180,max_range_sensor=10)
-drone2 = CrazyFlieLidar(1,np.array([x+1,y,z,0,0,yaw]).reshape(6,1),num_beams_sensor=180,max_range_sensor=10)
-drone3 = CrazyFlieLidar(2,np.array([x,y+1,z,0,0,yaw]).reshape(6,1),num_beams_sensor=180,max_range_sensor=10)
+drone1 = CrazyFlieLidar(0,np.array([x,y,z,0,0,yaw]).reshape(6,1),num_beams_sensor=360,max_range_sensor=10)
+drone2 = CrazyFlieLidar(1,np.array([x+1,y,z,0,0,yaw]).reshape(6,1),num_beams_sensor=360,max_range_sensor=10)
+drone3 = CrazyFlieLidar(2,np.array([x,y+1,z,0,0,yaw]).reshape(6,1),num_beams_sensor=360,max_range_sensor=10)
 
 initial_pose_1 = np.array([x,y,yaw],dtype=float).reshape(3,1)
 initial_pose_2 = np.array([x+1,y,yaw],dtype=float).reshape(3,1)
@@ -108,11 +108,14 @@ initial_pose_3 = np.array([x,y+1,yaw],dtype=float).reshape(3,1)
 
 rays = drone1.sensors[0].ray_vectors
 
+drones = [drone1, drone2, drone3]
+initial_poses = [initial_pose_1, initial_pose_2, initial_pose_3]
+
 if __name__ == "__main__":
-    c = SwarmExplorationController([drone1, drone2],[initial_pose_1, initial_pose_2], rays,
-                                   visualize=True, num_particles=5, assignment_method="optimized")
-    s = Simulator(environment=env, drones=[drone1, drone2], controller=c, com_delay=0.1, log_to_file="logs/test_lidar_a.json",
-                  env_to_file="logs/env_test_4.json", con_to_file="logs/controller8.json",slam_to_file="logs/slam8.json",
-                  shared_map_to_file="logs/shared_map8.json")
-    s.simulate(0.05, 150)
+    c = SwarmExplorationController(drones,initial_poses, rays,
+                                   visualize=False, num_particles=10, assignment_method="optimized")
+    s = Simulator(environment=env, drones=drones, controller=c, com_delay=0.1, log_to_file="logs/test.json",
+                  env_to_file="logs/env_test_4.json", con_to_file="logs/controller.json",slam_to_file="logs/slam.json",
+                  shared_map_to_file="logs/shared_map.json")
+    s.simulate(0.05, 200)
     #s.visualize()

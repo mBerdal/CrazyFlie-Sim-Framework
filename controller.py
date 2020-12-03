@@ -3,14 +3,12 @@ import numpy as np
 from utils.rotation_utils import ssa
 from slam.slammer import Slammer
 from slam.shared_map import SharedMap
-from collision_avoidance import PredicativeCollisionAvoidance
-from sensor.lidar_sensor import LidarSensor
 from sensor.odometry_sensor import OdometrySensor
 from logger.loggable import Loggable
 from logger.log_entry import LogEntry
-from slam.path_planning import RRT, RRTStar, AStar
-from slam.planner import Planner
-from slam.dynamic_window import DynamicWindow
+from planning.path_planning import AStar
+from planning.coordinator import Coordinator
+from planning.dynamic_window import DynamicWindow
 import matplotlib.pyplot as plt
 
 class Controller(ABC):
@@ -30,7 +28,7 @@ class DroneController(Controller, Loggable):
 
         self.waypoints = []
         self.current_waypoint = 0
-        self.accept_wp_dist = 0.5
+        self.accept_wp_dist = 1.0
 
         self.heading_controller = HeadingControllerPD(0)
         self.velocity_controller = VelocityControllerPID(0)
@@ -70,7 +68,7 @@ class DroneController(Controller, Loggable):
         elif self.state == "active":
             update = ((self.time_counter % 0.10) - ((self.time_counter - time_step) % 0.10) < 0)
             if update:
-                distance_grid = slammer.get_occupancy_grid(np.ceil(2))
+                distance_grid = slammer.get_dist_grid(np.ceil(2))
                 x = np.zeros([5,1])
                 x[0:3] = self.estimated_pose[:]
                 x[3:] = states[[6,11]]
@@ -298,7 +296,7 @@ class SwarmExplorationController(Controller, Loggable):
         self.controllers = {}
         self.slammers = {}
         assignment_method = kwargs.get("assignment_method", "optimized")
-        self.planner = Planner(assignment_method=assignment_method)
+        self.planner = Coordinator(assignment_method=assignment_method)
         self.initial_poses = initial_poses
 
         self.num_particles=kwargs.get("num_particles", 5)
@@ -315,7 +313,7 @@ class SwarmExplorationController(Controller, Loggable):
         self.time_counter = 0
         self.time_last_update_wps = 0
         self.wait_time_update_wps = kwargs.get("wait_time_update_wps", 2)
-        self.padding_occ_grid = 2
+        self.padding_occ_grid = 5
 
         self.visualize = kwargs.get("visualize", True)
         self.visualize_interval = kwargs.get("visualize_interval", 1.0)
@@ -354,26 +352,40 @@ class SwarmExplorationController(Controller, Loggable):
 
     def replanning(self):
         self.shared_map.merge_map(self.get_all_maps())
-        occ_grid = self.shared_map.get_occupancy_grid(pad=self.padding_occ_grid)
+        occ_grid_end_check = self.shared_map.get_occupancy_grid(pad=2)
+        occ_grid_planning = self.shared_map.get_occupancy_grid(pad=self.padding_occ_grid)
 
         for key in self.ids:
             if self.controllers[key].state == "idle":
                 continue
 
+            #Check if the final goal is reachable
+            wp_end = self.controllers[key].get_end_wp()
+            cell_wp_end = self.shared_map.cell_from_coordinate_local_map(key, wp_end)
+            if occ_grid_end_check[cell_wp_end[0],cell_wp_end[1]] == -1:
+                self.controllers[key].reset_waypoints()
+                continue
+
+            #Check if there is a collison along the line of sight between robot and current wp
             wp = self.controllers[key].get_assigned_wp()
             if wp is None:
                 continue
-
             cell_drone = self.shared_map.cell_from_coordinate_local_map(key, self.slammers[key].get_pose())
             cell_wp = self.shared_map.cell_from_coordinate_local_map(key, wp)
-            collision = self.shared_map.check_collision(cell_drone, cell_wp)
+
+            collision = False
+            if occ_grid_end_check[cell_wp[0],cell_wp[1]] == -1:
+                collision = True
+
+            collision_check = self.shared_map.check_collision(cell_drone, cell_wp)
+
+            collision = collision or collision_check
 
             if collision:
                 print("Replanning ID:", key)
                 target = self.controllers[key].get_end_wp()
                 cell_target = self.shared_map.cell_from_coordinate_local_map(key, target)
-                #r = RRTStar(cell_drone, cell_target, occ_grid, free_cells)
-                a = AStar(cell_drone, cell_target ,occ_grid)
+                a = AStar(cell_drone, cell_target, occ_grid_planning)
                 pad = self.padding_occ_grid - 1
                 while not a.init_sucsess and pad >= 0:
                     a = AStar(cell_drone, cell_target, self.shared_map.get_occupancy_grid(pad=pad))

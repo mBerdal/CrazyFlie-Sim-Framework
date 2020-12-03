@@ -1,15 +1,20 @@
 import numpy as np
-from slam.path_planning import AStar
+from planning.path_planning import AStar
+from utils.misc import compute_entropy_map
 import pyomo.environ as pe
 
-class Planner:
+class Coordinator:
 
     def __init__(self, **kwargs):
         self.min_len_frontier = kwargs.get("min_len_frontier", 10)
-        self.padding_occ_grid = kwargs.get("padding_occ_grid", 3)
+        self.padding_occ_grid = kwargs.get("padding_occ_grid", 5)
         self.max_range_observable = kwargs.get("max_range_observable",4)
         self.max_range_vis = kwargs.get("max_range_discount", 10)
         self.assignment_method = kwargs.get("assignment_method","optimized")
+        self.p_free = 0.4
+        self.p_occupied = 0.6
+        self.log_free = np.log(self.p_free / (1 - self.p_free))
+        self.log_occupied = np.log(self.p_occupied / (1 - self.p_occupied))
 
     def assign_waypoints(self, drones, shared_map):
         shared_map.compute_frontiers()
@@ -19,10 +24,19 @@ class Planner:
         num_f = len(points)
         num_d = len(drones)
         print("Number of frontiers:", num_f)
+        if num_f == 0:
+            return {}
         information_gain = []
+        prob_map = shared_map.convert_grid_to_prob()
+        original_entropy = compute_entropy_map(prob_map)
+
         for i in range(len(points)):
-            information_gain.append({"point": points[i], "information":
-                len(shared_map.get_observable_cells_from_pos(points[i],max_range=self.max_range_observable))})
+            observable_cells, occupied_cells = shared_map.get_observable_cells_from_pos(points[i],max_range=self.max_range_observable)
+            updated_map = self.update_map(shared_map.get_map(), observable_cells, occupied_cells)
+            exp = np.exp(updated_map)
+            prob_map = exp/(1 + exp)
+            updated_entropy = compute_entropy_map(prob_map)
+            information_gain.append({"point": points[i], "information": original_entropy - updated_entropy})
 
         dist = {}
         occ_grid = shared_map.get_occupancy_grid(pad=self.padding_occ_grid)
@@ -33,7 +47,7 @@ class Planner:
                 a = AStar(cell_d, p["point"], occ_grid)
                 pad = self.padding_occ_grid-1
                 while not a.init_sucsess and pad >= 0:
-                    a = AStar(cell_d,p["point"],shared_map.get_occupancy_grid(pad=0))
+                    a = AStar(cell_d, p["point"], shared_map.get_occupancy_grid(pad=0))
                     pad -= 1
                 res = a.planning()
 
@@ -55,7 +69,8 @@ class Planner:
         for i in range(num_f):
             for j in range(num_d):
                 utility[i, j] = self.utility_function(information_gain[i]["information"], dist[i][drone_ids[j]]["dist"])
-
+        invalid_indx = (np.isinf(utility) | np.isnan(utility))
+        utility[invalid_indx] = 0
         if self.assignment_method == "optimized":
             result = self.optimize_assignment(num_f, num_d, utility, p_vis)
         elif self.assignment_method == "greedy":
@@ -148,6 +163,7 @@ class Planner:
                 assignment[i,j] = pe.value(model.z[i+1,j+1])
         return assignment
 
+
     def greedy_assingment(self, num_f, num_d, utility, p_vis):
 
         assignment = np.zeros([num_f, num_d])
@@ -173,3 +189,13 @@ class Planner:
                 continue
             assignment[ind, j] = 1
         return assignment
+
+    def update_map(self, map, observable_cells, occupied_cells):
+        for c in observable_cells:
+            if not (c[0] < 0 or c[0] >= map.shape[0] or c[1] < 0 or c[1] >= map.shape[1]):
+                map[c[0],c[1]] += self.log_free
+        for c in occupied_cells:
+            if not(c[0] < 0 or c[0] >= map.shape[0] or c[1] < 0 or c[1] >= map.shape[1]):
+                map[c[0],c[1]] += self.log_occupied
+        return map
+

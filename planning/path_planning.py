@@ -285,7 +285,7 @@ class RRTStar(RRT):
 
 
 class AStar:
-    def __init__(self, start, target, occ_grid, movement=8):
+    def __init__(self, start, target, occ_grid, movement=4):
         self.occ_grid = occ_grid
         start_x = np.int(np.floor(start[0]))
         start_y = np.int(np.floor(start[1]))
@@ -383,22 +383,22 @@ class AStar:
 
     def get_path_to_target(self, path):
         wps = [path[0]]
-        current_node = path[1]
-        prev_node = path[0]
+        current_node = path[1].copy()
+        prev_node = path[0].copy()
         i = 0
         c = 2
         t = 0
         just_updated = False
         while c < len(path):
-            if not self.check_collision(wps[i], current_node) and t < 40:
-                prev_node = current_node
-                current_node = path[c]
+            if not self.check_collision(wps[i], current_node) and t < 20:
+                prev_node = current_node.copy()
+                current_node = path[c].copy()
                 just_updated = False
                 c += 1
                 t += 1
             else:
                 if not just_updated:
-                    wps.append(prev_node)
+                    wps.append(prev_node.copy())
                     just_updated = True
                     i += 1
                     t = 0
@@ -412,6 +412,7 @@ class AStar:
                     elif self.occ_grid[prev_node[0],prev_node[1]+dy] != -1:
                         current_node[0] = prev_node[0]
                         current_node[1] = prev_node[1]+dy
+                    just_updated = False
         wps.reverse()
         dist_list = [np.array([self.start[0],self.start[1]]).reshape(2,1)]
         for wp in wps:

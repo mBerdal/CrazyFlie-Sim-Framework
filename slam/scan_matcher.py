@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.signal import convolve2d
-from utils.misc import gaussian_kernel_2d
+from utils.misc import gaussian_kernel_2d, gaussian_kernel_2d_v2
 from utils.rotation_utils import rot_matrix_2d
 from math import floor
 
@@ -26,7 +26,6 @@ class ScanMatcher():
 
 
         self.kernel_size = kwargs.get("kernel_size",2)
-        self.kernel_var = kwargs.get("kernel_var",1)
         self.kernel = gaussian_kernel_2d(self.kernel_size, self.sigma)
 
         self.occ_threshold = kwargs.get("occ_threshold",0.7)
@@ -36,26 +35,26 @@ class ScanMatcher():
         like_field, lower_x, lower_y = self.compute_likelihood_field(map, initial_pose)
         step = self.initial_step
         iterations = 0
-        current_pose = initial_pose
+        current_pose = initial_pose.copy()
         best_score = self.score_scan_vectorized(rays, meas, current_pose, like_field, lower_x, lower_y, map_res)
         initial_score = best_score
-        best_pose = initial_pose
+        best_pose = initial_pose.copy()
         while iterations < self.max_iterations:
             best_perturbation = np.zeros(3)
             current_score = best_score
             for pet in self.perturbations:
-                tmp_pose = current_pose + step*pet.reshape(3,1)
+                tmp_pose = (current_pose + step*pet.reshape(3,1)).copy()
                 tmp_score = self.score_scan_vectorized(rays, meas, tmp_pose, like_field, lower_x, lower_y, map_res)
                 if tmp_score > current_score:
                     current_score = tmp_score
                     best_perturbation = pet
             if current_score > best_score:
                 best_score = current_score
-                best_pose = current_pose + step*best_perturbation.reshape(3,1)
+                best_pose = (current_pose + step*best_perturbation.reshape(3,1)).copy()
             else:
                 step = step/2
                 iterations += 1
-            current_pose = best_pose
+            current_pose = best_pose.copy()
         best_pose[2] = best_pose[2] % (2*np.pi)
         diff = best_score-initial_score
         return best_pose.reshape(3,1), diff

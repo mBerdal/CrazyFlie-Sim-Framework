@@ -81,7 +81,7 @@ class Slammer(Loggable):
     def get_trajectory(self):
         return self.slam.get_trajectory()
 
-    def get_occupancy_grid(self, radius):
+    def get_dist_grid(self, radius):
         pose = self.get_pose()
         map = self.get_map()
         lower_x = np.int(

@@ -9,18 +9,18 @@ class DynamicWindow:
     def __init__(self):
         # robot parameter
         self.max_speed = 1.0  # [m/s]
-        self.min_speed = 0.0  # [m/s]
-        self.max_yaw_rate = 360 * math.pi / 180.0  # [rad/s]
+        self.min_speed = -0.5  # [m/s]
+        self.max_yaw_rate = 720 * math.pi / 180.0  # [rad/s]
         self.max_accel = 3  # [m/ss]
         self.max_delta_yaw_rate = 1080 * math.pi / 180.0  # [rad/ss]
         self.v_resolution = 0.05  # [m/s]
         self.yaw_rate_resolution = 2 * math.pi / 180.0  # [rad/s]
         self.dt = 0.10  # [s] Time tick for motion prediction
         self.predict_time = 2.0  # [s]
-        self.to_goal_cost_gain = 5.0
+        self.to_goal_cost_gain = 3.0
         self.speed_cost_gain = 1.0
-        self.obstacle_cost_gain = 0.1
-        self.robot_stuck_flag_cons = 0.001  # constant to prevent robot stucked
+        self.obstacle_cost_gain = 0.25
+        self.robot_stuck_flag_cons = 0.01  # constant to prevent robot stucked
 
     def predict_trajectory(self, x_init, v, y):
         """
@@ -143,6 +143,8 @@ class DynamicWindow:
         dx = goal[0] - trajectory[-1, 0]
         dy = goal[1] - trajectory[-1, 1]
         error_angle = math.atan2(dy, dx)
+        if trajectory[-1, 3] < 0:
+            error_angle += np.pi
         cost_angle = ssa(error_angle, trajectory[-1, 2])
         cost = abs(math.atan2(math.sin(cost_angle), math.cos(cost_angle))) #+ math.sqrt(dx**2+dy**2)
         return cost

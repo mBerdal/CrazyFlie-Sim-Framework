@@ -15,6 +15,7 @@ def plot_last_maps(slam_file, shared_map_file=None, plot_trajectories=False):
         res = slam[i]["info"]["res"]
         size_x = slam[i]["info"]["size_x"]
         size_y = slam[i]["info"]["size_y"]
+        map = np.exp(map) / (1 + np.exp(map))
         extent = [-size_x/2*res, size_x/2*res,-size_y/2*res, size_y/2*res]
         plt.imshow(map.T, "Greys", origin="lower",extent=extent)
         if plot_trajectories:
@@ -42,6 +43,6 @@ def plot_last_maps(slam_file, shared_map_file=None, plot_trajectories=False):
 
 
 if __name__ == "__main__":
-    slam_name = "logs/slam5.json"
-    shared_name = "logs/shared_map5.json"
-    plot_last_maps(slam_name, shared_map_file=shared_name, plot_trajectories=True)
+    slam_name = "logs/slam1.json"
+    shared_name = "logs/shared_map1.json"
+    plot_last_maps(slam_name, plot_trajectories=True)
