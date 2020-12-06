@@ -16,8 +16,8 @@ map_params = {
 
 scan_match_params = {
         "max_iterations": 5,
-        "delta_x": 0.05,
-        "delta_y": 0.05,
+        "delta_x": 0.10,
+        "delta_y": 0.10,
         "delta_theta": 0.05,
         "step": 1,
         "sigma": 0.1,
@@ -33,8 +33,11 @@ odometry_params = {
 }
 
 obs_params = {
-    "sigma": 0.10,
-    "occ_threshold": 0.7,
+    "sigma": 0.1,
+    "occ_threshold": 0.6,
     "max_sensor_range": 10,
-    "skip_rays": 1
+    "skip_rays": 1,
+    "kernel_size": 3,
+    "eps": 0.3,
+    "p_unknown": 0.2,
 }

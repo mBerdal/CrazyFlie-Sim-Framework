@@ -91,7 +91,7 @@ class ScanMatcher():
         cells_x = np.floor((end_point[0, :] - lower_x) / map_res)
         cells_y = np.floor((end_point[1, :] - lower_y) / map_res)
 
-        unvalid_ind = ~((cells_x < 0) | (cells_x >= n) | (cells_y < 0) | (cells_x >= m))
+        unvalid_ind = ~((cells_x < 0) | (cells_x >= n) | (cells_y < 0) | (cells_y >= m))
 
         cells_x = cells_x[unvalid_ind].astype(int)
         cells_y = cells_y[unvalid_ind].astype(int)

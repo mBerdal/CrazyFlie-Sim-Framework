@@ -3,8 +3,9 @@ from slam.gridslam import GridSLAM
 from sensor.lidar_sensor import LidarSensor
 from sensor.odometry_sensor import OdometrySensor
 from logger.loggable import Loggable
-from utils.rotation_utils import ssa
+from utils.misc import compute_dist_loop_graph
 import slam.params as params
+from planning.path_planning import AStar
 
 class Slammer(Loggable):
 
@@ -80,6 +81,44 @@ class Slammer(Loggable):
 
     def get_trajectory(self):
         return self.slam.get_trajectory()
+
+    def check_loop_closure(self, min_t_dist, max_d_dist):
+        graph, current_node = self.slam.get_loop_graph()
+        #self.slam.visualize_loop_graph()
+        if len(graph) < min_t_dist:
+            return None
+        t_dist = compute_dist_loop_graph(graph, current_node)
+        pose = self.get_pose()
+        d_dist = [np.linalg.norm(g.pos - pose[0:2]).item() for g in graph]
+
+        indicator = [d_dist[i] <= max_d_dist and t_dist[i] >= min_t_dist for i in range(len(graph))]
+        map_res = self.get_map().res
+        occ_grid = self.get_map().get_occ_grid(0.7,0.3)
+        distances = []
+        for i in range(len(graph)):
+            if indicator[i]:
+                pose_cell = self.get_map().world_coordinate_to_grid_cell(self.get_pose())
+                g_cell = self.get_map().world_coordinate_to_grid_cell(graph[i].pos)
+                a = AStar(pose_cell, g_cell, occ_grid)
+                if a.init_sucsess:
+                    res = a.planning()
+                    if res is not None:
+                        distances.append(res[1]*map_res)
+                    else:
+                        distances.append(np.inf)
+                else:
+                    distances.append(np.inf)
+            else:
+                distances.append(np.inf)
+        valid_distance = [distances[i] <= max_d_dist for i in range(len(distances))]
+        ind = distances.index(min(distances))
+        if valid_distance[ind]:
+            node = graph[ind]
+            pos = node.pos
+            return pos, min(distances), t_dist[ind]
+        else:
+            return None
+
 
     def get_dist_grid(self, radius):
         pose = self.get_pose()

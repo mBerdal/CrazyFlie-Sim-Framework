@@ -29,6 +29,7 @@ class DroneController(Controller, Loggable):
         self.waypoints = []
         self.current_waypoint = 0
         self.accept_wp_dist = 1.0
+        self.loop_closing_dist = 0.2
 
         self.heading_controller = HeadingControllerPD(0)
         self.velocity_controller = VelocityControllerPID(0)
@@ -65,7 +66,7 @@ class DroneController(Controller, Loggable):
         if self.state == "idle":
             self.velocity_controller.update_set_point(0)
             self.yaw_controller.update_set_point(0)
-        elif self.state == "active":
+        else:
             update = ((self.time_counter % 0.10) - ((self.time_counter - time_step) % 0.10) < 0)
             if update:
                 distance_grid = slammer.get_dist_grid(np.ceil(2))
@@ -98,11 +99,11 @@ class DroneController(Controller, Loggable):
         pose[2] = (self.estimated_pose[2] + diff[2]) % (2*np.pi)
         return pose
 
-    def add_waypoints(self, waypoints):
+    def add_waypoints(self, waypoints, state="active"):
         for w in waypoints:
             self.waypoints.append(w)
         self.update_flag = True
-        self.state = "active"
+        self.state = state
 
     def reset_waypoints(self):
         self.waypoints = []
@@ -122,12 +123,23 @@ class DroneController(Controller, Loggable):
         if self.waypoints == []:
             self.state = "idle"
             return None
-        if np.linalg.norm(pose[0:2] - self.waypoints[self.current_waypoint][0:2]) < self.accept_wp_dist:
-            if self.current_waypoint < len(self.waypoints) - 1:
-                self.current_waypoint += 1
-                self.toggle_update_flag(True)
-            else:
-                self.state = "idle"
+        dist_wp = np.linalg.norm(pose[0:2] - self.waypoints[self.current_waypoint][0:2])
+        if self.state == "active":
+            if dist_wp < self.accept_wp_dist:
+                    if self.current_waypoint < len(self.waypoints) - 1:
+                        self.current_waypoint += 1
+                        self.toggle_update_flag(True)
+                    else:
+                        self.state = "idle"
+        elif self.state == "loop_closing":
+            if dist_wp < self.accept_wp_dist:
+                if self.current_waypoint == len(self.waypoints)-1:
+                    if dist_wp < self.loop_closing_dist:
+                        self.state = "idle"
+                else:
+                    self.current_waypoint += 1
+                    self.toggle_update_flag(True)
+
         return self.waypoints[self.current_waypoint]
 
     def get_assigned_wp(self):
@@ -217,80 +229,9 @@ class DroneControllerPosHeading(Controller, Loggable):
         return LogEntry(id=0)
 
 
-class WaypointController(Controller, Loggable):
-
-    def __init__(self, id, waypoints, **kwargs):
-        self.id = id
-        self.waypoints = waypoints
-        self.current_waypoint = 0
-        self.pos_controller = DroneSLAMController(id, self.waypoints[self.current_waypoint])
-        self.margin = kwargs.get("margin", 0.50)
-
-    def get_commands(self, states, sensor_data, time_step):
-        if np.linalg.norm(states[[0,1]]-self.waypoints[self.current_waypoint][0:2]) < self.margin:
-            if self.current_waypoint < len(self.waypoints)-1:
-                self.current_waypoint += 1
-                self.pos_controller.update_set_point(self.waypoints[self.current_waypoint])
-        return self.pos_controller.get_commands(states,sensor_data, time_step)
-
-    def update_set_point(self, set_point):
-        self.waypoints = set_point
-
-    def get_info_entry(self):
-        return self.pos_controller.get_info_entry()
-
-    def get_time_entry(self):
-        return self.pos_controller.get_time_entry()
-
-    def generate_time_entry(self):
-        return self.pos_controller.generate_time_entry()
-
-
-class SwarmController(Controller,Loggable):
-    def __init__(self, drones, set_points):
-        assert len(drones) == len(set_points)
-        controllers = {}
-        poses = {}
-        for d, s in zip(drones, set_points):
-            controllers[d.id] = WaypointController(d.id,s)
-            poses[d.id] = d.state[[0,1,5]]
-        self.controllers = controllers
-        self.time_counter = 0
-        self.update_map_time = 2
-
-
-    def get_commands(self, states, sensor_data, time_step):
-        commands = {}
-        self.time_counter += time_step
-        for key in self.controllers.keys():
-            commands[key] = self.controllers[key].get_commands(states[key],sensor_data[key], time_step)
-        return commands
-
-
-    def update_set_point(self, set_point):
-        for s in set_point:
-            self.controllers[s['id']].update_set_point(s['set_point'])
-
-    def get_info_entry(self):
-        return LogEntry(
-            ids=self.controllers.keys(),
-            controllers=[self.controllers[i].get_info_entry() for i in self.controllers.keys()]
-        )
-
-    def get_time_entry(self):
-        return LogEntry(
-            controllers=[self.controllers[i].get_time_entry() for i in self.controllers.keys()]
-        )
-
-    def generate_time_entry(self):
-        return LogEntry(
-            controllers=[self.controllers[i].generate_time_entry() for i in self.controllers.keys()]
-        )
-
-
 class SwarmExplorationController(Controller, Loggable):
 
-    def __init__(self, drones, initial_poses, rays, **kwargs):
+    def __init__(self, drones, initial_poses, rays, waypoints=None, **kwargs):
         self.ids = []
         self.simulation_callback = None
         self.controllers = {}
@@ -320,6 +261,11 @@ class SwarmExplorationController(Controller, Loggable):
         if self.visualize:
             self.init_plot()
 
+        self.t_dist = 6
+        self.d_dist = 15
+        self.loop_closure_interval = 5
+        self.loop_closure_count = 0
+
     def get_commands(self, states, sensor_data, time_step):
         commands = {}
         self.time_counter += time_step
@@ -339,6 +285,11 @@ class SwarmExplorationController(Controller, Loggable):
 
         if replan and calibration_ended:
             self.replanning()
+
+        loop_closure = ((self.time_counter % self.loop_closure_interval) - ((self.time_counter - time_step) % self.loop_closure_interval)) < 0
+
+        if loop_closure and calibration_ended:
+            self.loop_closure()
 
         for key in self.ids:
             commands[key] = self.controllers[key].get_commands(self.slammers[key], states[key], sensor_data[key], time_step)
@@ -393,8 +344,9 @@ class SwarmExplorationController(Controller, Loggable):
                 res = a.planning()
                 if res is not None:
                     wp = [self.shared_map.coordinate_from_cell_local_map(key, w) for w in res[0]]
+                    state = self.controllers[key].state
                     self.controllers[key].reset_waypoints()
-                    self.controllers[key].add_waypoints(wp)
+                    self.controllers[key].add_waypoints(wp,state=state)
                 else:
                     self.controllers[key].reset_waypoints()
 
@@ -410,6 +362,17 @@ class SwarmExplorationController(Controller, Loggable):
 
         if self.check_all_drones_idle() and self.simulation_callback is not None:
             self.simulation_callback()
+
+    def loop_closure(self):
+        for key in self.ids:
+            loop = self.slammers[key].check_loop_closure(self.t_dist, self.d_dist)
+            if loop is None:
+                continue
+            pos, d_dist, t_dist = loop
+            if t_dist/d_dist >= 0.8:
+                print("Closing Loop")
+                self.controllers[key].reset_waypoints()
+                self.controllers[key].add_waypoints([pos],state="loop_closing")
 
     def set_simulation_callback(self, callback):
         self.simulation_callback = callback
@@ -448,7 +411,9 @@ class SwarmExplorationController(Controller, Loggable):
     def get_drones(self):
         drones = {}
         for d in self.ids:
-            drones[d] = self.slammers[d].get_pose()
+            print(self.controllers[d].state)
+            if self.controllers[d].state != "loop_closing":
+                drones[d] = self.slammers[d].get_pose()
         return drones
 
     def get_active_drones(self):
@@ -544,6 +509,8 @@ class SwarmExplorationController(Controller, Loggable):
             slammers=[self.slammers[i].generate_time_entry() for i in self.ids],
             shared_map=self.shared_map.generate_time_entry()
         )
+
+
 class LowLevelController(ABC):
 
     @abstractmethod

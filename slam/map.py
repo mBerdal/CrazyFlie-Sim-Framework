@@ -19,7 +19,7 @@ class SLAM_map:
         self.max_range = kwargs.get("max_range",10)
 
         self.p_free = kwargs.get("p_free",0.4)
-        self.p_occupied = kwargs.get("p_occupied",0.7)
+        self.p_occupied = kwargs.get("p_occupied",0.8)
         self.p_prior = kwargs.get("p_prior",0.5)
         self.log_free = np.log(self.p_free / (1 - self.p_free))
         self.log_occupied = np.log(self.p_occupied / (1 - self.p_occupied))
@@ -42,14 +42,14 @@ class SLAM_map:
 
             end_point_cell = self.world_coordinate_to_grid_cell(end_point)
             if meas != np.inf:
-                if not (end_point_cell[0] < 0 or end_point_cell[0] > self.size_x or end_point_cell[1] < 0 or end_point_cell[1] >= self.size_y):
+                if not (end_point_cell[0] < 0 or end_point_cell[0] >= self.size_x or end_point_cell[1] < 0 or end_point_cell[1] >= self.size_y):
                     self.log_prob_map[end_point_cell[0],end_point_cell[1]] += self.log_occupied
             free_cells = self.grid_traversal(pose[0:2], end_point)
             for cell in free_cells:
                 if not (cell[0] < 0 or cell[0] >= self.size_x or cell[1] < 0 or cell[1] >= self.size_y):
                     self.log_prob_map[cell[0],cell[1]] += self.log_free
 
-    def world_coordinate_to_grid_cell(self,coord):
+    def world_coordinate_to_grid_cell(self, coord):
         cell = np.array([int(floor(coord[0]/self.res)) + self.center_x, int(floor(coord[1]/self.res))+self.center_y])
         return cell
 
@@ -100,6 +100,43 @@ class SLAM_map:
     def convert_grid_to_prob(self):
         exp_grid = np.exp(np.clip(self.log_prob_map,-10,10))
         return exp_grid/(1+exp_grid)
+
+    def get_occ_grid(self, occ_threshold, free_threshold):
+        occ_grid = np.zeros(self.log_prob_map.shape)
+        occ_grid[self.log_prob_map > occ_threshold] = -1
+        occ_grid[self.log_prob_map < free_threshold] = 1
+        return occ_grid
+
+    def check_collision(self, start, end):
+        start = self.world_coordinate_to_grid_cell(start)
+        end = self.world_coordinate_to_grid_cell(end)
+        ray = (end - start)
+        ray = ray / np.linalg.norm(ray)
+
+        step_x = 1 if ray[0] >= 0 else -1
+        step_y = 1 if ray[1] >= 0 else -1
+
+        current_cell = start.copy()
+
+        next_cell_boundary_x = (current_cell[0] + step_x)
+        next_cell_boundary_y = (current_cell[1] + step_y)
+
+        tmax_x = (next_cell_boundary_x - start[0]) / ray[0] if ray[0] != 0 else np.inf
+        tmax_y = (next_cell_boundary_y - start[1]) / ray[1] if ray[1] != 0 else np.inf
+
+        tdelta_x = 1 / ray[0] * step_x if ray[0] != 0 else np.inf
+        tdelta_y = 1 / ray[1] * step_y if ray[1] != 0 else np.inf
+
+        while np.any(current_cell != end):
+            if tmax_x <= tmax_y:
+                current_cell[0] += step_x
+                tmax_x += tdelta_x
+            else:
+                current_cell[1] += step_y
+                tmax_y += tdelta_y
+            if self.log_prob_map[current_cell[0], current_cell[1]] > self.log_occupied:
+                return True
+        return False
 
     def init_plot(self, axis):
         im = axis.imshow(self.convert_grid_to_prob().transpose(),"Greys",origin="lower",

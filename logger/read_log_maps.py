@@ -49,8 +49,15 @@ def read_slam_log(filename):
                 poses[t] = np.array(data[id]["log"][t]["pose"]).reshape(3,1)
             except KeyError:
                 pass
+        loop = {}
+        for t in timesteps:
+            try:
+                loop[t] = data[id]["log"][t]["loop_graph"]
+            except KeyError:
+                pass
+        t_loop = [k for k in poses.keys()]
         t_poses = [k for k in poses.keys()]
-        slams[id] = {"info": slam_info, "poses": poses, "t_poses": t_poses, "maps": maps, "t_maps": t_maps}
+        slams[id] = {"info": slam_info, "poses": poses, "t_poses": t_poses, "maps": maps, "t_maps": t_maps, "loop": loop, "t_loop":t_loop}
     return slams
 
 

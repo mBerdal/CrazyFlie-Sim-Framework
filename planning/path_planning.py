@@ -390,7 +390,7 @@ class AStar:
         t = 0
         just_updated = False
         while c < len(path):
-            if not self.check_collision(wps[i], current_node) and t < 20:
+            if not self.check_collision(wps[i], current_node):
                 prev_node = current_node.copy()
                 current_node = path[c].copy()
                 just_updated = False

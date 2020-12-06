@@ -1,5 +1,7 @@
 import numpy as np
 from utils.rotation_utils import ssa
+from queue import Queue
+
 
 def gaussian_kernel_2d(size, sigma,res=0.1):
     xx = np.arange(-size,size+1,1)*res
@@ -7,6 +9,7 @@ def gaussian_kernel_2d(size, sigma,res=0.1):
     x_grid, y_grid = np.meshgrid(xx,yy)
     kernel = np.exp(-((x_grid)**2 + (y_grid)**2)/(2*sigma**2))/(2*np.pi*sigma**2)
     return kernel/np.max(kernel)
+
 
 def gaussian_kernel_2d_v2(size, sigma,res=0.1):
     xx = np.arange(-size,size+1,1)
@@ -62,3 +65,110 @@ def compute_entropy_pose_gaussian(poses, weights):
         diff[2] = ssa(p[2], mean[2])
         covariance += diff * diff.T * w
     return 0.5 * np.log(np.linalg.det(covariance) * (2 * np.pi * np.e) ** (3 / 2))
+
+
+def compute_dist_loop_graph(loop_graph, current_node):
+    q = Queue(0)
+    q.put((current_node,0))
+    visited = []
+    dist = [0 for i in range(len(loop_graph))]
+    while not q.empty():
+        n, d = q.get()
+
+        if n in visited:
+            continue
+        else:
+            visited.append(n)
+            dist[n] = d
+
+        for e in loop_graph[n].edges:
+            if e in visited:
+                continue
+            else:
+                q.put((e,d+1))
+    return dist
+
+class Node:
+
+    def __init__(self, pos, parent):
+        self.pos = pos
+        if parent is not None:
+            self.edges = [parent]
+        else:
+            self.edges = []
+
+def compute_frontiers(map, starting_cell, occ_threshold):
+    cells = np.zeros(map.shape)
+    cells[map > occ_threshold] = -1
+    cells[map == 0] = 1
+
+    q = Queue(0)
+    q.put(starting_cell)
+
+    visited = np.zeros(map.shape)
+
+    frontiers = list()
+
+    neighbors_4 = [[-1,0], [0,1], [0,-1], [1,0]]
+    neighbors_8 = [[-1,1],[0,1],[1,1],[-1,0],[1,-0],[-1,-1],[0,-1],[1,-1]]
+
+    def check_frontier_cell(cell):
+        for ne in neighbors_4:
+            try:
+                if cells[cell[0]+ne[0],cell[1]+ne[1]] == 1:
+                    return True
+            except IndexError:
+                pass
+        return False
+
+    while not q.empty():
+        c = q.get()
+        if visited[c[0],c[1]]:
+            continue
+
+        if check_frontier_cell(c):
+            new_frontier = []
+            qf = Queue(0)
+            qf.put(c)
+
+            while not qf.empty():
+                cf = qf.get()
+                if visited[cf[0],cf[1]]:
+                    continue
+                if check_frontier_cell(cf):
+                    for n in neighbors_8:
+                        x = cf[0] + n[0]
+                        y = cf[1] + n[1]
+                        try:
+                            if cells[x,y] == 0 and not visited[x,y]:
+                                qf.put([x,y])
+                        except IndexError:
+                            pass
+                    new_frontier.append(cf)
+                visited[cf[0],cf[1]] = 1
+            frontiers.append(new_frontier)
+        else:
+            for n in neighbors_4:
+                x = c[0] + n[0]
+                y = c[1] + n[1]
+                try:
+                    if cells[x,y] == 0 and not visited[x,y]:
+                        q.put([x,y])
+                except IndexError:
+                    pass
+            visited[c[0],c[1]] = 1
+    return frontiers
+
+def test_loop_graph():
+    graph = [Node(0, None), Node(1,0), Node(2,1), Node(3,2), Node(4,3), Node(5,4), Node(6,0)]
+    graph[0].edges = [1, 5, 6]
+    graph[1].edges = [0, 2]
+    graph[2].edges = [1, 3]
+    graph[3].edges = [2, 4]
+    graph[4].edges = [3, 5]
+    graph[5].edges = [4, 0]
+    dist = compute_dist_loop_graph(graph,3)
+    print(dist)
+
+if __name__ == "__main__":
+    test_loop_graph()

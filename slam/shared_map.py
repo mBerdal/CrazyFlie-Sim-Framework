@@ -246,7 +246,7 @@ class SharedMap(Loggable):
         return np.array([x,y]).reshape(2,1)
 
     def convert_grid_to_prob(self):
-        exp_grid = np.exp(self.log_prob_map)
+        exp_grid = np.exp(np.clip(self.log_prob_map,-10,10))
         return exp_grid/(1+exp_grid)
 
     def get_frontier_points(self, min_frontier_length):
@@ -287,7 +287,10 @@ class SharedMap(Loggable):
                 for n in neighbors:
                     x = occupied_cells_x[i] + n[0]
                     y = occupied_cells_y[i] + n[1]
-                    occ_grid[x, y] = -1
+                    try:
+                        occ_grid[x, y] = -1
+                    except IndexError:
+                        continue
         return occ_grid
 
     def get_free_cells(self):

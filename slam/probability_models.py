@@ -35,7 +35,7 @@ class OdometryModel(ProbModel):
 
         delta_rot1_od = ssa(np.arctan2(od_new[1]-od_prev[1],od_new[0]-od_new[0]),od_prev[2])
         delta_trans_od = np.linalg.norm(od_prev[0:2]-od_new[0:2])
-        delta_rot2_od = ssa(od_new[2],(od_prev[2]-delta_rot1_od)%(2*np.pi))
+        delta_rot2_od = ssa(od_new[2],ssa(od_prev[2],delta_rot1_od)%(2*np.pi))
 
         delta_rot1_pose = ssa(np.arctan2(new_pose[1] - prev_pose[1], new_pose[0] - prev_pose[0]),prev_pose[2])
         delta_trans_pose = np.linalg.norm(prev_pose[0:2] - new_pose[0:2])
@@ -81,7 +81,6 @@ class ObservationModel:
         self.skip_rays = kwargs.get("skip_rays",4)
         self.ray_vectors = self.ray_vectors[:,0::self.skip_rays]
         self.occ_threshold = kwargs.get("occ_threshold",0.7)
-        self.eps = 0.01
 
         self.like_field = None
         self.lower_x = 0
@@ -89,32 +88,16 @@ class ObservationModel:
         self.map_res = None
 
         self.sigma = kwargs.get("sigma",0.5)
-        self.p_unknown = 0.2
+        self.p_unknown = kwargs.get("p_unkown", 0.5)
+        self.eps = kwargs.get("eps", 0.5)
 
         self.max_sensor_range = kwargs.get("max_sensor_range", 10)
         self.padding_dist = 2.0
         self.kernel_size = kwargs.get("kernel_size", 3)
         self.kernel = gaussian_kernel_2d(self.kernel_size, self.sigma)
 
+
     def likelihood(self, pose, measurements):
-        q = 1
-        pose = pose.squeeze()
-        rays = rot_matrix_2d(pose[2]) @ self.ray_vectors[0:2, :]
-        measurements = measurements[0::self.skip_rays]
-        for ind, meas in enumerate(measurements):
-            if meas == np.inf:
-                continue
-            else:
-                end_point = pose[0:2] + rays[:, ind] * meas
-            cell_x = int(floor((end_point[0] - self.lower_x) / self.map_res))
-            cell_y = int(floor((end_point[1] - self.lower_y) / self.map_res))
-
-            if cell_x < 0 or cell_x >= self.size_x or cell_y < 0 or cell_y >= self.size_y:
-                continue
-            q = q*(self.like_field[cell_x, cell_y] + self.eps)
-        return q
-
-    def likelihood_vectorized(self, pose, measurements):
         pose = pose.squeeze().reshape(3,1)
         rays = rot_matrix_2d(pose[2]) @ self.ray_vectors[0:2,:]
         measurements = measurements[0::self.skip_rays]
@@ -128,7 +111,7 @@ class ObservationModel:
         cells_x = cells_x[unvalid_ind].astype(int)
         cells_y = cells_y[unvalid_ind].astype(int)
         likelihood = self.like_field[cells_x,cells_y]
-        return np.sum(likelihood)
+        return np.prod(likelihood + self.eps)
 
     def compute_likelihood_field(self, initial_pose, map):
         lower_x = np.int(
@@ -151,7 +134,7 @@ class ObservationModel:
 
         binary_field = prob_field > np.log(self.occ_threshold / (1 - self.occ_threshold))
         like_field = convolve2d(binary_field, self.kernel, mode="same")
-        unknown_area = prob_field == 0
+        unknown_area = (prob_field == 0) & (like_field < self.p_unknown)
         like_field[unknown_area] = self.p_unknown
         self.like_field = like_field
         self.lower_x = (lower_x - map.center_x) * map.res
@@ -195,6 +178,8 @@ class ObservationModel:
         dist_field = np.exp(-dist_field ** 2 / (2 * self.sigma ** 2)) / (np.sqrt(2 * np.pi))
         unknown_area = (prob_field == 0)
         #dist_field[unknown_area] = self.p_unknown
+        #unknown_area = (prob_field == 0) & (dist_field < self.p_unknown)
+        #dist_field[unknown_area] = self.p_unknown
         self.like_field = dist_field
         self.lower_x = (lower_x - map.center_x) * map.res
         self.lower_y = (lower_y - map.center_y) * map.res
@@ -205,6 +190,7 @@ class ObservationModel:
     def visualize_likelihood(self,cells_x,cells_y):
         plt.figure()
         plt.imshow(self.like_field.T, origin="lower")
-        plt.plot(cells_x,cells_y,"o",markersize=1,color="red")
+        if cells_x is not None and cells_y is not None:
+            plt.plot(cells_x,cells_y,"o",markersize=1,color="red")
         plt.colorbar()
         plt.show()

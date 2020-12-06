@@ -19,7 +19,7 @@ class DynamicWindow:
         self.predict_time = 2.0  # [s]
         self.to_goal_cost_gain = 3.0
         self.speed_cost_gain = 1.0
-        self.obstacle_cost_gain = 0.25
+        self.obstacle_cost_gain = 0.5
         self.robot_stuck_flag_cons = 0.01  # constant to prevent robot stucked
 
     def predict_trajectory(self, x_init, v, y):

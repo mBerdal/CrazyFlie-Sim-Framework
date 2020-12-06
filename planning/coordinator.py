@@ -33,7 +33,7 @@ class Coordinator:
         for i in range(len(points)):
             observable_cells, occupied_cells = shared_map.get_observable_cells_from_pos(points[i],max_range=self.max_range_observable)
             updated_map = self.update_map(shared_map.get_map(), observable_cells, occupied_cells)
-            exp = np.exp(updated_map)
+            exp = np.exp(np.clip(updated_map,-10,10))
             prob_map = exp/(1 + exp)
             updated_entropy = compute_entropy_map(prob_map)
             information_gain.append({"point": points[i], "information": original_entropy - updated_entropy})
@@ -71,6 +71,7 @@ class Coordinator:
                 utility[i, j] = self.utility_function(information_gain[i]["information"], dist[i][drone_ids[j]]["dist"])
         invalid_indx = (np.isinf(utility) | np.isnan(utility))
         utility[invalid_indx] = 0
+        print(utility)
         if self.assignment_method == "optimized":
             result = self.optimize_assignment(num_f, num_d, utility, p_vis)
         elif self.assignment_method == "greedy":
