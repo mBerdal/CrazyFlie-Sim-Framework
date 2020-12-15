@@ -37,9 +37,20 @@ def create_straight_wall(corner1,corner2):
 
 
 def compute_entropy_map(map):
-    map = np.where(map < 0.00001, 0.00001, map)
-    map = np.where(map > 0.99999, 0.99999, map)
-    return -np.sum(map*np.log(map) + (1-map)*np.log(1-map))
+    map = np.clip(map, 0.00001, 0.99999)
+    return -np.sum(map*np.log2(map) + (1-map)*np.log2(1-map))
+
+def compute_information_map(map):
+    map = np.clip(map,0.00001,0.99999)
+    entropy = map*np.log2(map) + (1-map)*np.log2(1-map)
+    return np.sum((1 + entropy))
+
+def compute_mean_information_map(map):
+    information = compute_information_map(map)
+    n_obs = np.sum(map != 0.5)
+    return information/n_obs
+
+
 
 def compute_entropy_pose_discrete(poses, weights, res):
     cells = [(int(np.floor(p[0] /res)), int(np.floor(p[1] /res)),

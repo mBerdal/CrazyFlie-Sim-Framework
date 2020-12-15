@@ -22,7 +22,10 @@ class Node:
         return n
 
 class Particle:
-
+    """
+    Container class for the particles used in the particle filter. Contains the pose, map and graph for identification
+    of possible loop closures.
+    """
     def __init__(self, id, initial_weight, initial_pose, map_params={}, **kwargs):
         self.id = id
         self.weight = initial_weight
@@ -38,7 +41,7 @@ class Particle:
         self.total_nodes = 1
         self.loop_graph.append(Node(self.pose[0:2].copy(), None))
         self.min_dist_graph = 2.5
-        self.dist_node_update = 0.25
+        self.dist_node_update = 0.5
 
     def update_weight(self, weight):
         self.weight = weight

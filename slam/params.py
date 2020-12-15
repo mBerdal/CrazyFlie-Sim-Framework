@@ -1,5 +1,3 @@
-import numpy as np
-
 slam_params = {
     "threshold_resampling": 2
 }
@@ -12,12 +10,14 @@ map_params = {
     "size_y": 500,
     "res": 0.10,
     "max_range": 10,
+    "p_occupied": 0.7,
+    "p_free": 0.4
 }
 
 scan_match_params = {
         "max_iterations": 5,
-        "delta_x": 0.10,
-        "delta_y": 0.10,
+        "delta_x": 0.05,
+        "delta_y": 0.05,
         "delta_theta": 0.05,
         "step": 1,
         "sigma": 0.1,
@@ -34,7 +34,7 @@ odometry_params = {
 
 obs_params = {
     "sigma": 0.1,
-    "occ_threshold": 0.6,
+    "occ_threshold": 0.7,
     "max_sensor_range": 10,
     "skip_rays": 1,
     "kernel_size": 3,

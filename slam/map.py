@@ -7,20 +7,20 @@ from math import floor
 class SLAM_map:
     """
     Class for tracking a single SLAM map. The map uses occupancy grid representation of the environment. The cells are
-    updated based on probabilistic model.
-
+    updated based on probabilistic model of the observation.
     """
 
     def __init__(self, **kwargs):
-        self.size_x = kwargs.get("size_x",400)
-        self.size_y = kwargs.get("size_y",400)
+        self.size_x = kwargs.get("size_x",500)
+        self.size_y = kwargs.get("size_y",500)
         self.res = kwargs.get("res",0.1)
 
         self.max_range = kwargs.get("max_range",10)
 
         self.p_free = kwargs.get("p_free",0.4)
-        self.p_occupied = kwargs.get("p_occupied",0.8)
+        self.p_occupied = kwargs.get("p_occupied",0.7)
         self.p_prior = kwargs.get("p_prior",0.5)
+
         self.log_free = np.log(self.p_free / (1 - self.p_free))
         self.log_occupied = np.log(self.p_occupied / (1 - self.p_occupied))
         self.log_prior = np.log(self.p_prior / (1 - self.p_prior))
@@ -57,6 +57,7 @@ class SLAM_map:
         return not (np.any(cell < 0) or np.any(cell >= np.array([self.size_x,self.size_y])))
 
     def grid_traversal(self, start_point, end_point):
+        #Computes the cells that are observable along the laser ray.
         visited_cells = []
         current_cell = self.world_coordinate_to_grid_cell(start_point)
         last_cell = self.world_coordinate_to_grid_cell(end_point)
@@ -108,6 +109,7 @@ class SLAM_map:
         return occ_grid
 
     def check_collision(self, start, end):
+        #Checks for a collision in the occupancy grid on the straight line between start and end
         start = self.world_coordinate_to_grid_cell(start)
         end = self.world_coordinate_to_grid_cell(end)
         ray = (end - start)

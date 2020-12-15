@@ -5,7 +5,12 @@ from utils.rotation_utils import rot_matrix_2d
 from math import floor
 
 class ScanMatcher():
+    """
+    Class for performing scan matching between the current measurements and the most recent map.
 
+    Uses a greedy steepest descent approach to find the best match.
+
+    """
     def __init__(self, **kwargs):
         self.max_sensor_range = kwargs.get("max_sensor_range",10)
         self.padding_dist = 1.0
@@ -20,6 +25,7 @@ class ScanMatcher():
         self.delta_x = kwargs.get("delta_x",0.1)
         self.delta_y = kwargs.get("delta_y",0.1)
         self.delta_theta = kwargs.get("delta_theta",np.pi*2/180)
+
         self.perturbations = [np.array([-self.delta_x, 0, 0]), np.array([self.delta_x, 0, 0]),
                               np.array([0, -self.delta_y, 0]), np.array([0, self.delta_y, 0]),
                               np.array([0, 0, -self.delta_theta]), np.array([0, 0, self.delta_theta])]
@@ -36,7 +42,7 @@ class ScanMatcher():
         step = self.initial_step
         iterations = 0
         current_pose = initial_pose.copy()
-        best_score = self.score_scan_vectorized(rays, meas, current_pose, like_field, lower_x, lower_y, map_res)
+        best_score = self.score_scan(rays, meas, current_pose, like_field, lower_x, lower_y, map_res)
         initial_score = best_score
         best_pose = initial_pose.copy()
         while iterations < self.max_iterations:
@@ -44,7 +50,7 @@ class ScanMatcher():
             current_score = best_score
             for pet in self.perturbations:
                 tmp_pose = (current_pose + step*pet.reshape(3,1)).copy()
-                tmp_score = self.score_scan_vectorized(rays, meas, tmp_pose, like_field, lower_x, lower_y, map_res)
+                tmp_score = self.score_scan(rays, meas, tmp_pose, like_field, lower_x, lower_y, map_res)
                 if tmp_score > current_score:
                     current_score = tmp_score
                     best_perturbation = pet
@@ -57,29 +63,9 @@ class ScanMatcher():
             current_pose = best_pose.copy()
         best_pose[2] = best_pose[2] % (2*np.pi)
         diff = best_score-initial_score
-        return best_pose.reshape(3,1), diff
+        return best_pose.reshape(3, 1), diff
 
     def score_scan(self, rays, measurements, pose, like_field, lower_x, lower_y, map_res):
-        q = 0
-        pose = pose.squeeze()
-        rays = rot_matrix_2d(pose[2]) @ rays[0:2,0::self.skip_rays]
-        measurements = measurements[0::self.skip_rays]
-        n = like_field.shape[0]
-        m = like_field.shape[1]
-        for ind, meas in enumerate(measurements):
-            if meas == np.inf:
-                continue
-            else:
-                end_point = pose[0:2] + rays[:,ind]*meas
-            cell_x = int(floor((end_point[0] -lower_x)/map_res))
-            cell_y = int(floor((end_point[1] -lower_y)/map_res))
-
-            if cell_x < 0 or cell_x >= n or cell_y < 0 or cell_y >= m:
-                continue
-            q = q+like_field[cell_x, cell_y]
-        return q
-
-    def score_scan_vectorized(self, rays, measurements, pose, like_field, lower_x, lower_y, map_res):
         n = like_field.shape[0]
         m = like_field.shape[1]
 
@@ -99,6 +85,7 @@ class ScanMatcher():
         return np.sum(likelihood)
 
     def compute_likelihood_field(self, map, initial_pose):
+        #Approximates the likelihood field using convolution on the binary occupancy grid with a gaussian kernel
         lower_x = np.int((initial_pose[0] - self.max_sensor_range - self.padding_dist)/map.res) + map.center_x
         lower_y = np.int((initial_pose[1] - self.max_sensor_range - self.padding_dist)/map.res) + map.center_y
 
@@ -111,12 +98,10 @@ class ScanMatcher():
 
         like_field = convolve2d(binary_field, self.kernel, mode="same")
 
-        unknown_area = prob_field == 0
-        like_field[unknown_area] = 1/self.max_sensor_range
-
         return like_field, (lower_x - map.center_x)*map.res, (lower_y-map.center_y)*map.res
 
     def compute_distance_field(self, map, initial_pose):
+        #Computes the likelihood field using the distance to nearest occupied cell
         lower_x = np.int(np.floor((initial_pose[0] - self.max_sensor_range - self.padding_dist) / map.res)) + map.center_x
         lower_y = np.int(np.floor((initial_pose[1] - self.max_sensor_range - self.padding_dist) / map.res)) + map.center_y
 
@@ -145,6 +130,4 @@ class ScanMatcher():
             dist_occupied = np.sqrt((xx-xx[cell_x,cell_y])**2 + (yy-yy[cell_x,cell_y])**2)
             dist_field = np.minimum(dist_field,dist_occupied)
         dist_field = np.exp(-dist_field**2/(2*self.sigma**2))/(np.sqrt(2*np.pi))
-        #unknown_area = prob_field == 0
-        #dist_field[unknown_area] = self.p_unknown
         return dist_field, (lower_x - map.center_x)*map.res, (lower_y-map.center_y)*map.res

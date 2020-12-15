@@ -11,6 +11,12 @@ from copy import deepcopy
 
 
 class SharedMap(Loggable):
+
+    """
+    Class for the global map bulit on the local maps from each drone.
+
+    Includes functionality for planning like extraction of frontiers and collision check for paths.
+    """
     def __init__(self, base_id, maps, initial_poses):
         self.min_frontier_length = 20
         self.ids = maps.keys()
@@ -162,6 +168,7 @@ class SharedMap(Loggable):
         self.occ_grid = occ_grid
 
     def grid_traversal(self, start_point, end_point):
+        #Finds all unoccupied cells between the start point and the end point. Return also the occupied cell if found.
         visited_cells = []
         current_cell = self.get_cell(start_point)
         last_cell = self.get_cell(end_point)
@@ -339,7 +346,7 @@ class SharedMap(Loggable):
             )
 
     def generate_time_entry(self):
-        if self.counter % 10 == 0:
+        if self.counter % 8 == 0:
             return LogEntry(
                 counter=self.counter,
                 map=self.get_map()

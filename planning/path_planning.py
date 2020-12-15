@@ -3,6 +3,15 @@ import matplotlib.pyplot as plt
 from heapq import heappush, heappop
 
 class RRT:
+    """
+    Implementation of the Random Rapidly-Exploring Tree algorithm for path planning.
+
+    The implementation is based on the Python Robotics library's implementation:
+    https://github.com/AtsushiSakai/PythonRobotics/blob/master/PathPlanning/RRT/rrt.py
+
+    The code have been modified to a class.
+    """
+
     class Node:
         def __init__(self, coord):
             self.coord = coord
@@ -165,6 +174,15 @@ class RRT:
 
 
 class RRTStar(RRT):
+    """
+    Implementation of the Random Rapidly-Exploring Tree Star algorithm for path planning.
+
+    The implementation is based on the Python Robotics library's implementation:
+    https://github.com/AtsushiSakai/PythonRobotics/blob/master/PathPlanning/RRT/rrt.py
+
+    The code have been modified to a class and other modifications have been made.
+    """
+
     class Node:
         def __init__(self, coord):
             self.coord = coord
@@ -285,6 +303,15 @@ class RRTStar(RRT):
 
 
 class AStar:
+    """
+    Implementation of the A-Star algoorithm for path planning on occupancy grid.
+
+    The implementation is based on https://github.com/richardos/occupancy-grid-a-star
+
+    The code have been modified to a class and other minor changes.
+
+    """
+
     def __init__(self, start, target, occ_grid, movement=4):
         self.occ_grid = occ_grid
         start_x = np.int(np.floor(start[0]))
@@ -296,6 +323,7 @@ class AStar:
         self.target = np.array([target_x,target_y])
         self.target = (target_x,target_y)
         self.init_sucsess = True
+
         if self.occ_grid[self.start[0],self.start[1]] == -1:
             self.init_sucsess = False
 

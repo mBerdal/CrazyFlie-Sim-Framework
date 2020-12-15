@@ -22,6 +22,10 @@ class ProbModel(ABC):
 
 
 class OdometryModel(ProbModel):
+    """
+    Class for representing the odometry model used in the particle filter. Computes the likelihood given the previous state,
+    proposed state and odometry reading.
+    """
 
     def __init__(self, **kwargs):
         self.alpha1 = kwargs.get("alpha1", 0.15)
@@ -76,6 +80,11 @@ class OdometryModel(ProbModel):
 
 
 class ObservationModel:
+    """
+    Observation model used in the particle filter. Computes the likelihood given the current measurement, pose estimate
+    and map. Based on the Likelihood Field from Probabilitstic Robotics.
+    """
+
     def __init__(self, ray_vectors, **kwargs):
         self.ray_vectors = ray_vectors
         self.skip_rays = kwargs.get("skip_rays",4)
@@ -96,7 +105,6 @@ class ObservationModel:
         self.kernel_size = kwargs.get("kernel_size", 3)
         self.kernel = gaussian_kernel_2d(self.kernel_size, self.sigma)
 
-
     def likelihood(self, pose, measurements):
         pose = pose.squeeze().reshape(3,1)
         rays = rot_matrix_2d(pose[2]) @ self.ray_vectors[0:2,:]
@@ -114,6 +122,7 @@ class ObservationModel:
         return np.prod(likelihood + self.eps)
 
     def compute_likelihood_field(self, initial_pose, map):
+        #Approximate the likelihood field using a convolution on the binary occupancy grid and a gaussian kernel.
         lower_x = np.int(
             np.floor((initial_pose[0] - self.max_sensor_range - self.padding_dist) / map.res)) + map.center_x
         lower_y = np.int(
@@ -134,8 +143,6 @@ class ObservationModel:
 
         binary_field = prob_field > np.log(self.occ_threshold / (1 - self.occ_threshold))
         like_field = convolve2d(binary_field, self.kernel, mode="same")
-        unknown_area = (prob_field == 0) & (like_field < self.p_unknown)
-        like_field[unknown_area] = self.p_unknown
         self.like_field = like_field
         self.lower_x = (lower_x - map.center_x) * map.res
         self.lower_y = (lower_y - map.center_y) * map.res
@@ -143,7 +150,8 @@ class ObservationModel:
         self.size_x = like_field.shape[0]
         self.size_y = like_field.shape[1]
 
-    def compute_likelihood_field_dist(self,initial_pose,map):
+    def compute_likelihood_field_dist(self, initial_pose, map):
+        #Compute the likelihood field using the distance to nearest occupied cell.
         lower_x = np.int(
             np.floor((initial_pose[0] - self.max_sensor_range - self.padding_dist) / map.res)) + map.center_x
         lower_y = np.int(
@@ -176,10 +184,6 @@ class ObservationModel:
             dist_occupied = np.sqrt((xx - xx[cell_x, cell_y]) ** 2 + (yy - yy[cell_x, cell_y]) ** 2)
             dist_field = np.minimum(dist_field, dist_occupied)
         dist_field = np.exp(-dist_field ** 2 / (2 * self.sigma ** 2)) / (np.sqrt(2 * np.pi))
-        unknown_area = (prob_field == 0)
-        #dist_field[unknown_area] = self.p_unknown
-        #unknown_area = (prob_field == 0) & (dist_field < self.p_unknown)
-        #dist_field[unknown_area] = self.p_unknown
         self.like_field = dist_field
         self.lower_x = (lower_x - map.center_x) * map.res
         self.lower_y = (lower_y - map.center_y) * map.res

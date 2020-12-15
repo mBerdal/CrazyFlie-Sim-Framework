@@ -28,7 +28,7 @@ class OdometrySensor(Sensor):
 
 def noise_odometry():
     n = np.zeros([3,1])
-    n[0] = np.random.normal(scale=0.5)
-    n[1] = np.random.normal(scale=0.5)
-    n[2] = np.random.normal(scale=0.25)
+    n[0] = np.random.normal(scale=0.2)
+    n[1] = np.random.normal(scale=0.2)
+    n[2] = np.random.normal(scale=0.1)
     return n

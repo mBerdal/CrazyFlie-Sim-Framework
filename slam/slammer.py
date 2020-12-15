@@ -8,7 +8,9 @@ import slam.params as params
 from planning.path_planning import AStar
 
 class Slammer(Loggable):
-
+    """
+    Wrapper class for the SLAM algorithm for easier implementation with the controllers.
+    """
     def __init__(self, id, num_particles, rays, **kwargs):
         self.id = id
         self.map_params = kwargs.get("map_params",params.map_params)
@@ -45,6 +47,7 @@ class Slammer(Loggable):
                 lidar_data = sd["reading"]
             if sd["type"] == OdometrySensor:
                 odometry_data = sd["reading"]
+
         update_flag = False
         if lidar_data is not None and odometry_data is not None:
             diff_translation = np.linalg.norm(odometry_data[0:2]-self.prev_odometry[0:2])
@@ -84,9 +87,8 @@ class Slammer(Loggable):
 
     def check_loop_closure(self, min_t_dist, max_d_dist):
         graph, current_node = self.slam.get_loop_graph()
-        #self.slam.visualize_loop_graph()
         if len(graph) < min_t_dist:
-            return None
+            return []
         t_dist = compute_dist_loop_graph(graph, current_node)
         pose = self.get_pose()
         d_dist = [np.linalg.norm(g.pos - pose[0:2]).item() for g in graph]
@@ -110,14 +112,11 @@ class Slammer(Loggable):
                     distances.append(np.inf)
             else:
                 distances.append(np.inf)
-        valid_distance = [distances[i] <= max_d_dist for i in range(len(distances))]
-        ind = distances.index(min(distances))
-        if valid_distance[ind]:
-            node = graph[ind]
-            pos = node.pos
-            return pos, min(distances), t_dist[ind]
-        else:
-            return None
+        loops = []
+        for i, d in enumerate(distances):
+            if d <= max_d_dist:
+                loops.append((graph[i].pos, d, t_dist[i]))
+        return loops
 
 
     def get_dist_grid(self, radius):
